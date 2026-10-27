@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>O2O Shop DOP Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+HK:wght@400;500&display=swap">
+<script src="d3.min.js"></script>
+<style>
+  /* Layout: a single scanning column — headline tiles, then team, shop and TM sections in cards */
+  :root {
+    --bg: #f5f6f4; --panel: #ffffff; --fg: #1d2421; --muted: #5d6963; --line: #dfe3df;
+    --accent: #1f7a5c; --bad: #c0392b; --good: #1f7a5c; --grid: #e8ebe8;
+    --sans: "IBM Plex Sans", "Noto Sans HK", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #121614; --panel: #1a201d; --fg: #e6ebe8; --muted: #9aa7a0; --line: #2c3430; --accent: #4cc497; --bad: #ff7a6b; --good: #4cc497; --grid: #252c28; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #121614; --panel: #1a201d; --fg: #e6ebe8; --muted: #9aa7a0; --line: #2c3430; --accent: #4cc497; --bad: #ff7a6b; --good: #4cc497; --grid: #252c28; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+  .wrap { max-width: 1280px; margin: 0 auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 28px; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0; }
+  h3 { font-size: 15px; font-weight: 500; margin: 0; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .note { color: var(--muted); font-size: 12px; margin: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; }
+  .tile, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .tile { padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+  .tile .lbl { font-size: 12px; color: var(--muted); }
+  .tile .val { font: 500 24px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+  .sec { display: flex; flex-direction: column; gap: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; }
+  .card { padding: 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .scroll { overflow: auto; max-height: 560px; }
+  .scroll.short { max-height: none; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, .l { text-align: left; }
+  th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 500; z-index: 1; }
+  th button { all: unset; cursor: pointer; }
+  th button:focus-visible { outline: 2px solid var(--accent); }
+  td.neg { color: var(--bad); } td.pos { color: var(--good); }
+  .bar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
+  .ctrl { display: flex; flex-wrap: wrap; gap: 8px; }
+  select, input { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
+  .chart { position: relative; min-height: 420px; }
+  .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 10px; font-size: 12px; }
+  .tip .k { color: var(--muted); }
+  .mix { display: flex; flex-direction: column; gap: 6px; }
+  .mix .row { display: grid; grid-template-columns: minmax(8rem, 12rem) 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .mix .fill { height: 10px; border-radius: 4px; background: var(--accent); }
+  .wait { border: 1px dashed var(--line); border-radius: 10px; padding: 18px; color: var(--muted); }
+  /* lock screen */
+  .lock { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .lock form { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; width: min(100%, 360px); display: flex; flex-direction: column; gap: 12px; }
+  .lock button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 0; background: var(--accent); color: var(--panel); cursor: pointer; font-weight: 500; }
+  .err { color: var(--bad); font-size: 13px; min-height: 1.2em; margin: 0; }
+</style>
+</head>
+<body>
+<div class="lock" id="lock">
+  <form id="unlock">
+    <h1>O2O Shop DOP Dashboard</h1>
+    <p class="note">Internal data. Enter the dashboard password to open it.</p>
+    <input id="pw" type="password" autocomplete="current-password" aria-label="Password" placeholder="Password" required>
+    <button type="submit">Open dashboard</button>
+    <p class="err" id="err"></p>
+  </form>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <header>
+    <h1>O2O Shop DOP Dashboard</h1>
+    <p class="sub" id="takeaway"></p>
+    <p class="note" id="updated"></p>
+  </header>
+  <div class="tiles" id="kpis"></div>
+
+  <section class="sec" id="team">
+    <h2>By DM and AM</h2>
+    <div class="grid">
+      <div class="card"><h3>DM summary</h3><p class="note">Month to date, all shops. DOP is GP after frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs.</p><div class="scroll short"><table id="dm-table"></table></div></div>
+      <div class="card"><h3>AM summary</h3><p class="note">Month to date, all shops. Projected DOP scales month-to-date DOP to the full month.</p><div class="scroll short"><table id="am-table"></table></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="shops">
+    <h2>Shop DOP ranking</h2>
+    <div class="ctrl">
+      <select id="am-filter" aria-label="Filter by AM"></select>
+      <input id="search" type="search" placeholder="Search shop code or name" aria-label="Search shops">
+    </div>
+    <div class="grid">
+      <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">Full-month projection, HK$. Hover a bar for details.</p><div class="chart" id="rank"></div></div>
+      <div class="card"><h3>All shops</h3><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="tm">
+    <h2>TM cost breakdown</h2>
+    <div class="grid">
+      <div class="card"><h3>Where the TM cost goes</h3><p class="note">All shops, month to date, HK$. From the TM Cost by Shop sheet.</p><div class="mix" id="mix"></div></div>
+      <div class="card"><h3>TM cost by shop</h3><p class="note">Headcount, PT and outsource hours, total shop cost and the roster-based month cost.</p><div class="scroll"><table id="tm-table"></table></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="target">
+    <h2>POS GMV vs monthly target</h2>
+    <div class="wait">The Shop Monthly Target report is on the in-house Tableau server, which this site can't reach. Once the targets are copied into a Google Sheet tab, each shop's achievement % can show here.</div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  let DATA = null;
+  const sortState = {};
+
+  async function decrypt(pkg, password) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(pkg.salt), iterations: pkg.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(pkg.iv) }, key, b64(pkg.ct));
+    return JSON.parse(new TextDecoder().decode(plain));
+  }
+
+  async function unlock(pw, quiet) {
+    try {
+      const res = await fetch('data.enc.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('nofile');
+      DATA = await decrypt(await res.json(), pw);
+      try { sessionStorage.setItem('o2o_pw', pw); } catch (e) {}
+      $('lock').hidden = true; $('app').hidden = false;
+      draw();
+    } catch (e) {
+      if (!quiet) $('err').textContent = e.message === 'nofile' ? 'Data file not found. The daily update may not have run yet.' : 'Wrong password. Please try again.';
+    }
+  }
+
+  $('unlock').addEventListener('submit', (e) => { e.preventDefault(); $('err').textContent = ''; unlock($('pw').value, false); });
+  try { const saved = sessionStorage.getItem('o2o_pw'); if (saved) unlock(saved, true); } catch (e) {}
+
+  const fmtK = (v) => v == null ? '—' : (Math.abs(v) >= 10000 ? new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 }).format(v) : d3.format(',.0f')(v));
+  const fmtN = (v) => v == null ? '' : d3.format(',.0f')(v);
+  const fmtP = (v) => v == null ? '' : d3.format('.1%')(v);
+  const fmtH = (v) => v == null ? '' : d3.format(',.1f')(v);
+  const accent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const bad = () => getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
+
+  function drawTable(table, rows, cols) {
+    const st = sortState[table.id] || {};
+    const data = rows.slice();
+    if (st.key) {
+      const c = cols.find((x) => x.key === st.key);
+      const val = (r) => c.get ? c.get(r) : r[c.key];
+      data.sort((a, b) => { const va = val(a), vb = val(b); if (va == null) return 1; if (vb == null) return -1; return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb))) * (st.dir === 'asc' ? 1 : -1); });
+    }
+    const thead = document.createElement('thead'), hr = document.createElement('tr');
+    cols.forEach((c) => {
+      const th = document.createElement('th'); if (c.cls) th.className = c.cls;
+      th.setAttribute('aria-sort', st.key === c.key ? (st.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      const b = document.createElement('button');
+      b.textContent = c.label + (st.key === c.key ? (st.dir === 'asc' ? ' ↑' : ' ↓') : '');
+      b.addEventListener('click', () => { const cur = sortState[table.id] || {}; sortState[table.id] = { key: c.key, dir: cur.key === c.key && cur.dir === 'desc' ? 'asc' : 'desc' }; draw(); });
+      th.appendChild(b); hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    const tbody = document.createElement('tbody');
+    data.forEach((r) => {
+      const tr = document.createElement('tr');
+      cols.forEach((c) => {
+        const td = document.createElement('td'); const v = c.get ? c.get(r) : r[c.key];
+        td.textContent = c.fmt ? c.fmt(v) : (v ?? '');
+        if (c.cls) td.className = c.cls;
+        if (c.sign && v != null) td.classList.add(v < 0 ? 'neg' : 'pos');
+        if (c.bar && v != null && c.bar.max > 0) {
+          const s = document.createElement('span'); s.className = 'bar';
+          s.style.width = Math.max(2, Math.round(Math.abs(v) / c.bar.max * 60)) + 'px';
+          s.style.background = v < 0 ? bad() : accent(); td.appendChild(s);
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.replaceChildren(thead, tbody);
+  }
+
+  const teamCols = (k, label, rows) => {
+    const max = d3.max(rows, (r) => Math.abs(r.proj_dop || 0)) || 0;
+    return [{ key: k, label }, { key: 'pos_gmv', label: 'POS GMV', fmt: fmtN }, { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'gp_pct', label: 'GP%', fmt: fmtP }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN }, { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true, bar: { max } }];
+  };
+
+  function drawRank(el, rows) {
+    el.replaceChildren();
+    const sorted = rows.filter((r) => r.proj_dop != null).sort((a, b) => b.proj_dop - a.proj_dop);
+    if (!sorted.length) return;
+    const pick = sorted.length <= 20 ? sorted : [...sorted.slice(0, 10), ...sorted.slice(-10)];
+    const W = el.clientWidth || 400, rowH = 19, top = 8, H = top + pick.length * rowH + 24;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('font-size', 11).style('font-family', 'var(--sans)');
+    const probe = svg.append('text').text('WWW 天水圍置富嘉湖店'); const labW = Math.min(W * 0.45, probe.node().getComputedTextLength() + 8); probe.remove();
+    const ext = d3.extent(pick, (d) => d.proj_dop);
+    const x = d3.scaleLinear([Math.min(0, ext[0]), Math.max(0, ext[1])], [labW, W - 44]).nice();
+    const y = (i) => top + i * rowH;
+    svg.append('g').selectAll('line').data(x.ticks(4)).join('line').attr('x1', x).attr('x2', x).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--grid)');
+    svg.append('g').selectAll('text').data(x.ticks(4)).join('text').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text(fmtK);
+    svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--muted)');
+    if (pick.length === 20) svg.append('line').attr('x1', 0).attr('x2', W).attr('y1', y(10) - 1).attr('y2', y(10) - 1).style('stroke', 'var(--line)').attr('stroke-dasharray', '3 3');
+    svg.append('g').selectAll('text').data(pick).join('text').attr('x', 0).attr('y', (d, i) => y(i) + 13).style('fill', 'var(--fg)').text((d) => d.shop_code + ' ' + d.shop_name);
+    const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; el.appendChild(tip);
+    svg.append('g').selectAll('rect').data(pick).join('rect')
+      .attr('x', (d) => Math.min(x(0), x(d.proj_dop))).attr('y', (d, i) => y(i) + 3).attr('height', rowH - 6)
+      .attr('width', (d) => Math.max(1, Math.abs(x(d.proj_dop) - x(0)))).attr('rx', 3)
+      .style('fill', (d) => d.proj_dop < 0 ? 'var(--bad)' : 'var(--accent)')
+      .on('mousemove', (ev, d) => {
+        tip.hidden = false; tip.replaceChildren();
+        const k = document.createElement('div'); k.className = 'k'; k.textContent = `${d.shop_code} ${d.shop_name} · ${d.am}`; tip.appendChild(k);
+        [['Proj. DOP', fmtN(d.proj_dop)], ['DOP MTD', fmtN(d.dop)], ['POS GP%', fmtP(d.pos_gp_pct)]].forEach(([a, b]) => { const l = document.createElement('div'); l.textContent = `${a}: ${b}`; tip.appendChild(l); });
+        const [mx, my] = d3.pointer(ev, el); tip.style.left = Math.max(0, Math.min(mx + 12, el.clientWidth - 200)) + 'px'; tip.style.top = (my + 12) + 'px';
+      })
+      .on('mouseleave', () => { tip.hidden = true; });
+    svg.append('g').selectAll('text').data(pick).join('text').attr('y', (d, i) => y(i) + 13)
+      .attr('x', (d) => d.proj_dop < 0 ? x(d.proj_dop) - 4 : x(d.proj_dop) + 4).attr('text-anchor', (d) => d.proj_dop < 0 ? 'end' : 'start')
+      .style('fill', 'var(--muted)').text((d) => fmtK(d.proj_dop));
+  }
+
+  function drawMix(el, tm) {
+    const s = (k) => d3.sum(tm, (r) => r[k] || 0);
+    const base = s('ss_cost') + s('assp_cost') + s('sa_cost');
+    const parts = [['SS / ASSP / SA salaries', base], ['SS / SA overhead 15%', s('ss_sa_with_oh') - base], ['DM / AM / UM overhead', s('mgmt_overhead')], ['PT / 468PT', s('pt_cost')], ['Outsource', s('os_cost')], ['PT 7% + 468PT levy', s('pt_levy')], ['Transport allowance', s('transport')], ['OT', s('ot_cost')]].sort((a, b) => b[1] - a[1]);
+    const max = d3.max(parts, (p) => p[1]) || 1, total = d3.sum(parts, (p) => p[1]);
+    el.replaceChildren(...parts.map(([name, v]) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const a = document.createElement('span'); a.textContent = name;
+      const t = document.createElement('div'); const f = document.createElement('div'); f.className = 'fill'; f.style.width = (v / max * 100) + '%'; t.appendChild(f);
+      const n = document.createElement('span'); n.textContent = `${fmtN(v)} · ${d3.format('.0%')(total ? v / total : 0)}`;
+      row.append(a, t, n); return row;
+    }));
+  }
+
+  const amSel = $('am-filter'), search = $('search');
+  amSel.addEventListener('change', () => draw());
+  search.addEventListener('input', () => draw());
+
+  function draw() {
+    if (!DATA) return;
+    const { dm, am, shops, tm } = DATA;
+    const sum = (k) => d3.sum(dm, (r) => r[k] || 0);
+    const t = { pos_gmv: sum('pos_gmv'), pos_gpa: sum('pos_gpa'), tm_cost: sum('tm_cost'), dop: sum('dop'), proj_dop: sum('proj_dop') };
+    t.gp_pct = t.pos_gmv ? t.pos_gpa / t.pos_gmv : null;
+    const tiles = [['POS GMV (MTD)', 'pos_gmv'], ['POS GPA (MTD)', 'pos_gpa'], ['POS GP%', 'gp_pct'], ['TM cost, frontline (MTD)', 'tm_cost'], ['DOP (MTD)', 'dop'], ['Projected DOP (full month)', 'proj_dop']];
+    $('kpis').replaceChildren(...tiles.map(([label, k]) => {
+      const d = document.createElement('div'); d.className = 'tile';
+      const l = document.createElement('span'); l.className = 'lbl'; l.textContent = label;
+      const v = document.createElement('span'); v.className = 'val'; v.textContent = k === 'gp_pct' ? fmtP(t[k]) : fmtK(t[k]);
+      if ((k === 'dop' || k === 'proj_dop') && t[k] < 0) v.style.color = 'var(--bad)';
+      d.append(l, v); return d;
+    }));
+    const pos = shops.filter((r) => (r.proj_dop || 0) > 0).length;
+    $('takeaway').textContent = `${DATA.month}, month to date up to ${DATA.as_of}: projected DOP ${fmtK(t.proj_dop)} for the month, with ${pos} of ${shops.length} shops projected positive.`;
+    $('updated').textContent = `Data refreshed ${DATA.generated_at} from the DOP and TM cost Google Sheets.`;
+
+    drawTable($('dm-table'), dm, teamCols('dm', 'DM', dm));
+    drawTable($('am-table'), am, teamCols('am', 'AM', am));
+
+    const picked = amSel.value;
+    const ams = [...new Set(shops.map((r) => r.am))].sort();
+    if (amSel.options.length !== ams.length + 1) { amSel.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); amSel.value = picked; }
+    const q = search.value.trim().toLowerCase();
+    const rows = shops.filter((r) => (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
+    const max = d3.max(rows, (r) => Math.abs(r.proj_dop || 0)) || 0;
+    const ratio = (r) => { const gp = (r.pos_gpa || 0) + (r.pickup_gpa || 0); return gp ? (r.tm_cost || 0) / gp : null; };
+    drawTable($('shop-table'), rows, [
+      { key: 'shop_code', label: 'Shop' }, { key: 'shop_name', label: 'Name', cls: 'l' }, { key: 'am', label: 'AM', cls: 'l' },
+      { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'pos_gp_pct', label: 'GP%', fmt: fmtP }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN },
+      { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'tm_to_gp', label: 'TM / GP', fmt: fmtP, get: ratio },
+      { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true, bar: { max } },
+    ]);
+    $('shop-count').textContent = `${rows.length} shops shown. Click a column to sort. TM / GP = frontline TM cost ÷ (POS GPA + pickup GPA).`;
+    drawRank($('rank'), rows);
+
+    drawMix($('mix'), tm);
+    const tmRows = tm.filter((r) => !q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q));
+    drawTable($('tm-table'), tmRows, [
+      { key: 'shop', label: 'Shop' }, { key: 'shop_name', label: 'Name', cls: 'l' },
+      { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASSP', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
+      { key: 'pt_hours', label: 'PT hrs', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs', fmt: fmtH },
+      { key: 'ss_sa_with_oh', label: 'SS+SA ×1.15', fmt: fmtN }, { key: 'pt_cost', label: 'PT cost', fmt: fmtN }, { key: 'os_cost', label: 'OS cost', fmt: fmtN },
+      { key: 'total_cost', label: 'Shop total', fmt: fmtN }, { key: 'roster_total_cost', label: 'Roster month', fmt: fmtN },
+    ]);
+  }
+  window.addEventListener('resize', () => draw());
+})();
+</script>
+</body>
+</html>

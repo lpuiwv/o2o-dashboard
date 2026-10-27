@@ -4,39 +4,45 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>O2O Shop DOP Dashboard</title>
+<title>O2O Dashboard (Shop ver.)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+HK:wght@400;500&display=swap">
 <script src="d3.min.js"></script>
 <style>
-  /* Layout: a single scanning column — headline tiles, then team, shop and TM sections in cards */
+  /* Layout: header + tab bar, one tab visible at a time; each tab = tiles, then cards in a responsive grid */
   :root {
     --bg: #f5f6f4; --panel: #ffffff; --fg: #1d2421; --muted: #5d6963; --line: #dfe3df;
-    --accent: #1f7a5c; --bad: #c0392b; --good: #1f7a5c; --grid: #e8ebe8;
+    --accent: #1f7a5c; --bad: #c0392b; --good: #1f7a5c; --warn: #a86b00; --warn-bg: #fdf3dc; --grid: #e8ebe8;
     --sans: "IBM Plex Sans", "Noto Sans HK", system-ui, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, monospace;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #121614; --panel: #1a201d; --fg: #e6ebe8; --muted: #9aa7a0; --line: #2c3430; --accent: #4cc497; --bad: #ff7a6b; --good: #4cc497; --grid: #252c28; color-scheme: dark; }
+    :root:not([data-theme="light"]) { --bg: #121614; --panel: #1a201d; --fg: #e6ebe8; --muted: #9aa7a0; --line: #2c3430; --accent: #4cc497; --bad: #ff7a6b; --good: #4cc497; --warn: #f0b84c; --warn-bg: #2e2614; --grid: #252c28; color-scheme: dark; }
   }
-  :root[data-theme="dark"] { --bg: #121614; --panel: #1a201d; --fg: #e6ebe8; --muted: #9aa7a0; --line: #2c3430; --accent: #4cc497; --bad: #ff7a6b; --good: #4cc497; --grid: #252c28; color-scheme: dark; }
+  :root[data-theme="dark"] { --bg: #121614; --panel: #1a201d; --fg: #e6ebe8; --muted: #9aa7a0; --line: #2c3430; --accent: #4cc497; --bad: #ff7a6b; --good: #4cc497; --warn: #f0b84c; --warn-bg: #2e2614; --grid: #252c28; color-scheme: dark; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
-  .wrap { max-width: 1280px; margin: 0 auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 28px; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
   h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
   h2 { font-size: 17px; font-weight: 600; margin: 0; }
   h3 { font-size: 15px; font-weight: 500; margin: 0; }
   .sub { color: var(--muted); margin: 4px 0 0; }
   .note { color: var(--muted); font-size: 12px; margin: 0; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tabs button { font: inherit; font-weight: 500; background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .pane { display: flex; flex-direction: column; gap: 24px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; }
   .tile, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
   .tile { padding: 14px; display: flex; flex-direction: column; gap: 4px; }
   .tile .lbl { font-size: 12px; color: var(--muted); }
   .tile .val { font: 500 24px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+  .tile .hint { font-size: 11.5px; color: var(--muted); }
   .sec { display: flex; flex-direction: column; gap: 12px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; align-items: start; }
   .card { padding: 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .scroll { overflow: auto; max-height: 560px; }
   .scroll.short { max-height: none; }
@@ -47,17 +53,24 @@
   th button { all: unset; cursor: pointer; }
   th button:focus-visible { outline: 2px solid var(--accent); }
   td.neg { color: var(--bad); } td.pos { color: var(--good); }
+  td.flag { color: var(--warn); font-weight: 500; }
   .bar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
-  .ctrl { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   select, input { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
-  .chart { position: relative; min-height: 420px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: var(--panel); color: var(--muted); padding: 6px 12px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+  .chart { position: relative; min-height: 120px; }
   .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 10px; font-size: 12px; }
   .tip .k { color: var(--muted); }
   .mix { display: flex; flex-direction: column; gap: 6px; }
   .mix .row { display: grid; grid-template-columns: minmax(8rem, 12rem) 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .mix .fill { height: 10px; border-radius: 4px; background: var(--accent); }
-  .wait { border: 1px dashed var(--line); border-radius: 10px; padding: 18px; color: var(--muted); }
-  /* lock screen */
+  .callout { background: var(--warn-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+  .callout b { color: var(--warn); font-weight: 600; }
+  .callout ul { margin: 0; padding-left: 18px; }
+  .wait { border: 1px dashed var(--line); border-radius: 10px; padding: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+  .wait p { margin: 0; }
   .lock { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
   .lock form { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; width: min(100%, 360px); display: flex; flex-direction: column; gap: 12px; }
   .lock button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 0; background: var(--accent); color: var(--panel); cursor: pointer; font-weight: 500; }
@@ -67,7 +80,7 @@
 <body>
 <div class="lock" id="lock">
   <form id="unlock">
-    <h1>O2O Shop DOP Dashboard</h1>
+    <h1>O2O Dashboard (Shop ver.)</h1>
     <p class="note">Internal data. Enter the dashboard password to open it.</p>
     <input id="pw" type="password" autocomplete="current-password" aria-label="Password" placeholder="Password" required>
     <button type="submit">Open dashboard</button>
@@ -77,43 +90,84 @@
 
 <div class="wrap" id="app" hidden>
   <header>
-    <h1>O2O Shop DOP Dashboard</h1>
-    <p class="sub" id="takeaway"></p>
+    <h1>O2O Dashboard (Shop ver.)</h1>
     <p class="note" id="updated"></p>
   </header>
-  <div class="tiles" id="kpis"></div>
 
-  <section class="sec" id="team">
-    <h2>By DM and AM</h2>
-    <div class="grid">
-      <div class="card"><h3>DM summary</h3><p class="note">Month to date, all shops. DOP is GP after frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs.</p><div class="scroll short"><table id="dm-table"></table></div></div>
-      <div class="card"><h3>AM summary</h3><p class="note">Month to date, all shops. Projected DOP scales month-to-date DOP to the full month.</p><div class="scroll short"><table id="am-table"></table></div></div>
+  <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+    <button role="tab" id="tab-dop" data-tab="dop" aria-selected="true">DOP</button>
+    <button role="tab" id="tab-tm" data-tab="tm" aria-selected="false">TM cost</button>
+    <button role="tab" id="tab-pos" data-tab="pos" aria-selected="false">POS achievement</button>
+    <button role="tab" id="tab-discount" data-tab="discount" aria-selected="false">Manual Discount</button>
+  </nav>
+
+  <!-- DOP -->
+  <section class="pane" id="dop" role="tabpanel" aria-labelledby="tab-dop">
+    <div class="sec">
+      <p class="sub" id="takeaway"></p>
+      <p class="note" id="dop-dates"></p>
+      <div class="ctrl">
+        <span class="note">Scope</span>
+        <div class="seg" role="group" aria-label="Scope">
+          <button id="scope-all" aria-pressed="true">All shops</button>
+          <button id="scope-ex" aria-pressed="false">Excl. Outlet &amp; EPR</button>
+        </div>
+      </div>
+      <div class="tiles" id="kpis"></div>
+      <div class="callout" id="dop-checks" hidden></div>
+    </div>
+
+    <div class="sec">
+      <h2>By DM and AM</h2>
+      <div class="grid">
+        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs.</p><div class="scroll short"><table id="dm-table"></table></div></div>
+        <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × days in month ÷ days of POS sales, as in the source sheet.</p><div class="scroll short"><table id="am-table"></table></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>Shop DOP ranking</h2>
+      <div class="ctrl">
+        <select id="am-filter" aria-label="Filter by AM"></select>
+        <input id="search" type="search" placeholder="Search shop code or name" aria-label="Search shops">
+      </div>
+      <div class="grid">
+        <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">Full-month projection, HK$. Hover a bar for details.</p><div class="chart" id="rank"></div></div>
+        <div class="card"><h3>All shops</h3><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
+      </div>
     </div>
   </section>
 
-  <section class="sec" id="shops">
-    <h2>Shop DOP ranking</h2>
-    <div class="ctrl">
-      <select id="am-filter" aria-label="Filter by AM"></select>
-      <input id="search" type="search" placeholder="Search shop code or name" aria-label="Search shops">
-    </div>
+  <!-- TM cost -->
+  <section class="pane" id="tm" role="tabpanel" aria-labelledby="tab-tm" hidden>
+    <div class="tiles" id="tm-kpis"></div>
     <div class="grid">
-      <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">Full-month projection, HK$. Hover a bar for details.</p><div class="chart" id="rank"></div></div>
-      <div class="card"><h3>All shops</h3><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
+      <div class="card"><h3>Where the TM cost goes</h3><p class="note">All shops, current TM cost by component, HK$.</p><div class="mix" id="mix"></div></div>
+      <div class="card">
+        <h3>TM cost by shop</h3>
+        <p class="note">Current TM cost = shop total cost so far this month. Projected TM cost = full-month cost based on the roster.</p>
+        <div class="ctrl"><input id="tm-search" type="search" placeholder="Search shop code or name" aria-label="Search shops"></div>
+        <div class="scroll"><table id="tm-table"></table></div>
+      </div>
     </div>
   </section>
 
-  <section class="sec" id="tm">
-    <h2>TM cost breakdown</h2>
-    <div class="grid">
-      <div class="card"><h3>Where the TM cost goes</h3><p class="note">All shops, month to date, HK$. From the TM Cost by Shop sheet.</p><div class="mix" id="mix"></div></div>
-      <div class="card"><h3>TM cost by shop</h3><p class="note">Headcount, PT and outsource hours, total shop cost and the roster-based month cost.</p><div class="scroll"><table id="tm-table"></table></div></div>
+  <!-- POS achievement -->
+  <section class="pane" id="pos" role="tabpanel" aria-labelledby="tab-pos" hidden>
+    <div class="wait">
+      <h2>POS achievement</h2>
+      <p>POS GMV vs monthly target by shop comes from the Tableau report <i>O2O Report › Shop Monthly Target</i>.</p>
+      <p>This site updates itself from Google Sheets only and can't reach the in-house Tableau server. Once the target data is copied into a Google Sheet tab each day (for example by a Tableau subscription or export), this tab will show each shop's GMV, target and achievement %.</p>
     </div>
   </section>
 
-  <section class="sec" id="target">
-    <h2>POS GMV vs monthly target</h2>
-    <div class="wait">The Shop Monthly Target report is on the in-house Tableau server, which this site can't reach. Once the targets are copied into a Google Sheet tab, each shop's achievement % can show here.</div>
+  <!-- Manual Discount -->
+  <section class="pane" id="discount" role="tabpanel" aria-labelledby="tab-discount" hidden>
+    <div class="wait">
+      <h2>Manual Discount</h2>
+      <p>Manual discount by shop comes from the Tableau report <i>O2O Report › Manual Discount</i>.</p>
+      <p>Same as POS achievement: once the data is in a Google Sheet tab, this tab will show it.</p>
+    </div>
   </section>
 </div>
 
@@ -122,7 +176,9 @@
   const $ = (id) => document.getElementById(id);
   const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
   let DATA = null;
+  let scope = 'all';
   const sortState = {};
+  const TABS = ['dop', 'tm', 'pos', 'discount'];
 
   async function decrypt(pkg, password) {
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -130,7 +186,6 @@
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(pkg.iv) }, key, b64(pkg.ct));
     return JSON.parse(new TextDecoder().decode(plain));
   }
-
   async function unlock(pw, quiet) {
     try {
       const res = await fetch('data.enc.json?t=' + Date.now(), { cache: 'no-store' });
@@ -138,21 +193,30 @@
       DATA = await decrypt(await res.json(), pw);
       try { sessionStorage.setItem('o2o_pw', pw); } catch (e) {}
       $('lock').hidden = true; $('app').hidden = false;
-      draw();
+      showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dop');
     } catch (e) {
       if (!quiet) $('err').textContent = e.message === 'nofile' ? 'Data file not found. The daily update may not have run yet.' : 'Wrong password. Please try again.';
     }
   }
-
   $('unlock').addEventListener('submit', (e) => { e.preventDefault(); $('err').textContent = ''; unlock($('pw').value, false); });
   try { const saved = sessionStorage.getItem('o2o_pw'); if (saved) unlock(saved, true); } catch (e) {}
+
+  let current = 'dop';
+  function showTab(name) {
+    current = name;
+    TABS.forEach((t) => { $(t).hidden = t !== name; $('tab-' + t).setAttribute('aria-selected', String(t === name)); });
+    if (location.hash.slice(1) !== name) history.replaceState(null, '', '#' + name);
+    draw();
+  }
+  document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+  window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (TABS.includes(h) && h !== current) showTab(h); });
 
   const fmtK = (v) => v == null ? '—' : (Math.abs(v) >= 10000 ? new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 }).format(v) : d3.format(',.0f')(v));
   const fmtN = (v) => v == null ? '' : d3.format(',.0f')(v);
   const fmtP = (v) => v == null ? '' : d3.format('.1%')(v);
   const fmtH = (v) => v == null ? '' : d3.format(',.1f')(v);
-  const accent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  const bad = () => getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const GP_FLAG = 0.4; // POS GP% above this is unusual for a shop
 
   function drawTable(table, rows, cols) {
     const st = sortState[table.id] || {};
@@ -180,10 +244,11 @@
         td.textContent = c.fmt ? c.fmt(v) : (v ?? '');
         if (c.cls) td.className = c.cls;
         if (c.sign && v != null) td.classList.add(v < 0 ? 'neg' : 'pos');
+        if (c.flag && c.flag(r)) { td.classList.add('flag'); td.textContent += ' ⚠'; td.title = 'Unusually high GP% — please check the source data'; }
         if (c.bar && v != null && c.bar.max > 0) {
           const s = document.createElement('span'); s.className = 'bar';
           s.style.width = Math.max(2, Math.round(Math.abs(v) / c.bar.max * 60)) + 'px';
-          s.style.background = v < 0 ? bad() : accent(); td.appendChild(s);
+          s.style.background = v < 0 ? css('--bad') : css('--accent'); td.appendChild(s);
         }
         tr.appendChild(td);
       });
@@ -192,19 +257,32 @@
     table.replaceChildren(thead, tbody);
   }
 
+  function tiles(el, list) {
+    el.replaceChildren(...list.map(([label, value, opts = {}]) => {
+      const d = document.createElement('div'); d.className = 'tile';
+      const l = document.createElement('span'); l.className = 'lbl'; l.textContent = label;
+      const v = document.createElement('span'); v.className = 'val'; v.textContent = value;
+      if (opts.bad) v.style.color = 'var(--bad)';
+      if (opts.good) v.style.color = 'var(--good)';
+      d.append(l, v);
+      if (opts.hint) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = opts.hint; d.appendChild(h); }
+      return d;
+    }));
+  }
+
   const teamCols = (k, label, rows) => {
     const max = d3.max(rows, (r) => Math.abs(r.proj_dop || 0)) || 0;
-    return [{ key: k, label }, { key: 'pos_gmv', label: 'POS GMV', fmt: fmtN }, { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'gp_pct', label: 'GP%', fmt: fmtP }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN }, { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true, bar: { max } }];
+    return [{ key: k, label }, { key: 'pos_gmv', label: 'POS GMV', fmt: fmtN }, { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'gp_pct', label: 'GP%', fmt: fmtP }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN }, { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'other', label: 'Other costs', fmt: fmtN, get: (r) => ['office_cost', 'disposal_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex', 'mkt_cost'].reduce((t, c) => t + (r[c] || 0), 0) }, { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true, bar: { max } }];
   };
 
   function drawRank(el, rows) {
     el.replaceChildren();
     const sorted = rows.filter((r) => r.proj_dop != null).sort((a, b) => b.proj_dop - a.proj_dop);
-    if (!sorted.length) return;
+    if (!sorted.length || !el.clientWidth) return;
     const pick = sorted.length <= 20 ? sorted : [...sorted.slice(0, 10), ...sorted.slice(-10)];
-    const W = el.clientWidth || 400, rowH = 19, top = 8, H = top + pick.length * rowH + 24;
+    const W = el.clientWidth, rowH = 19, top = 8, H = top + pick.length * rowH + 24;
     const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('font-size', 11).style('font-family', 'var(--sans)');
-    const probe = svg.append('text').text('WWW 天水圍置富嘉湖店'); const labW = Math.min(W * 0.45, probe.node().getComputedTextLength() + 8); probe.remove();
+    const probe = svg.append('text').text('WWW 天水圍置富嘉湖店 ⚠'); const labW = Math.min(W * 0.45, probe.node().getComputedTextLength() + 8); probe.remove();
     const ext = d3.extent(pick, (d) => d.proj_dop);
     const x = d3.scaleLinear([Math.min(0, ext[0]), Math.max(0, ext[1])], [labW, W - 44]).nice();
     const y = (i) => top + i * rowH;
@@ -212,7 +290,8 @@
     svg.append('g').selectAll('text').data(x.ticks(4)).join('text').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text(fmtK);
     svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--muted)');
     if (pick.length === 20) svg.append('line').attr('x1', 0).attr('x2', W).attr('y1', y(10) - 1).attr('y2', y(10) - 1).style('stroke', 'var(--line)').attr('stroke-dasharray', '3 3');
-    svg.append('g').selectAll('text').data(pick).join('text').attr('x', 0).attr('y', (d, i) => y(i) + 13).style('fill', 'var(--fg)').text((d) => d.shop_code + ' ' + d.shop_name);
+    svg.append('g').selectAll('text').data(pick).join('text').attr('x', 0).attr('y', (d, i) => y(i) + 13)
+      .style('fill', (d) => d.pos_gp_pct > GP_FLAG ? 'var(--warn)' : 'var(--fg)').text((d) => d.shop_code + ' ' + d.shop_name + (d.pos_gp_pct > GP_FLAG ? ' ⚠' : ''));
     const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; el.appendChild(tip);
     svg.append('g').selectAll('rect').data(pick).join('rect')
       .attr('x', (d) => Math.min(x(0), x(d.proj_dop))).attr('y', (d, i) => y(i) + 3).attr('height', rowH - 6)
@@ -233,7 +312,7 @@
   function drawMix(el, tm) {
     const s = (k) => d3.sum(tm, (r) => r[k] || 0);
     const base = s('ss_cost') + s('assp_cost') + s('sa_cost');
-    const parts = [['SS / ASSP / SA salaries', base], ['SS / SA overhead 15%', s('ss_sa_with_oh') - base], ['DM / AM / UM overhead', s('mgmt_overhead')], ['PT / 468PT', s('pt_cost')], ['Outsource', s('os_cost')], ['PT 7% + 468PT levy', s('pt_levy')], ['Transport allowance', s('transport')], ['OT', s('ot_cost')]].sort((a, b) => b[1] - a[1]);
+    const parts = [['SS / ASS / SA salaries', base], ['SS / ASS / SA overhead 15%', s('ss_sa_with_oh') - base], ['DM / AM / UM overhead', s('mgmt_overhead')], ['PT / 468PT', s('pt_cost')], ['Outsource', s('os_cost')], ['PT 7% + 468PT levy', s('pt_levy')], ['Transport allowance', s('transport')], ['OT', s('ot_cost')]].sort((a, b) => b[1] - a[1]);
     const max = d3.max(parts, (p) => p[1]) || 1, total = d3.sum(parts, (p) => p[1]);
     el.replaceChildren(...parts.map(([name, v]) => {
       const row = document.createElement('div'); row.className = 'row';
@@ -244,27 +323,44 @@
     }));
   }
 
-  const amSel = $('am-filter'), search = $('search');
+  const amSel = $('am-filter'), search = $('search'), tmSearch = $('tm-search');
   amSel.addEventListener('change', () => draw());
   search.addEventListener('input', () => draw());
+  tmSearch.addEventListener('input', () => draw());
+  $('scope-all').addEventListener('click', () => { scope = 'all'; draw(); });
+  $('scope-ex').addEventListener('click', () => { scope = 'ex'; draw(); });
 
-  function draw() {
-    if (!DATA) return;
-    const { dm, am, shops, tm } = DATA;
+  function drawDop() {
+    const ex = scope === 'ex' && DATA.dm_ex && DATA.dm_ex.length;
+    $('scope-all').setAttribute('aria-pressed', String(!ex));
+    $('scope-ex').setAttribute('aria-pressed', String(!!ex));
+    $('scope-ex').disabled = !(DATA.dm_ex && DATA.dm_ex.length);
+    const dm = ex ? DATA.dm_ex : DATA.dm, am = ex ? DATA.am_ex : DATA.am;
+    const shops = DATA.shops;
     const sum = (k) => d3.sum(dm, (r) => r[k] || 0);
-    const t = { pos_gmv: sum('pos_gmv'), pos_gpa: sum('pos_gpa'), tm_cost: sum('tm_cost'), dop: sum('dop'), proj_dop: sum('proj_dop') };
+    const t = { pos_gmv: sum('pos_gmv'), pos_gpa: sum('pos_gpa'), pickup_gpa: sum('pickup_gpa'), tm_cost: sum('tm_cost'), dop: sum('dop'), proj_dop: sum('proj_dop') };
     t.gp_pct = t.pos_gmv ? t.pos_gpa / t.pos_gmv : null;
-    const tiles = [['POS GMV (MTD)', 'pos_gmv'], ['POS GPA (MTD)', 'pos_gpa'], ['POS GP%', 'gp_pct'], ['TM cost, frontline (MTD)', 'tm_cost'], ['DOP (MTD)', 'dop'], ['Projected DOP (full month)', 'proj_dop']];
-    $('kpis').replaceChildren(...tiles.map(([label, k]) => {
-      const d = document.createElement('div'); d.className = 'tile';
-      const l = document.createElement('span'); l.className = 'lbl'; l.textContent = label;
-      const v = document.createElement('span'); v.className = 'val'; v.textContent = k === 'gp_pct' ? fmtP(t[k]) : fmtK(t[k]);
-      if ((k === 'dop' || k === 'proj_dop') && t[k] < 0) v.style.color = 'var(--bad)';
-      d.append(l, v); return d;
-    }));
+    tiles($('kpis'), [
+      ['POS GMV (MTD)', fmtK(t.pos_gmv)], ['POS GPA (MTD)', fmtK(t.pos_gpa)], ['POS GP%', fmtP(t.gp_pct)], ['Pickup GPA (MTD)', fmtK(t.pickup_gpa)],
+      ['Frontline TM cost (MTD)', fmtK(t.tm_cost)], ['DOP (MTD)', fmtK(t.dop), { bad: t.dop < 0 }], ['Projected DOP', fmtK(t.proj_dop), { bad: t.proj_dop < 0, hint: 'Full month' }],
+    ]);
     const pos = shops.filter((r) => (r.proj_dop || 0) > 0).length;
-    $('takeaway').textContent = `${DATA.month}, month to date up to ${DATA.as_of}: projected DOP ${fmtK(t.proj_dop)} for the month, with ${pos} of ${shops.length} shops projected positive.`;
-    $('updated').textContent = `Data refreshed ${DATA.generated_at} from the DOP and TM cost Google Sheets.`;
+    $('takeaway').textContent = `${DATA.month}: projected DOP ${fmtK(t.proj_dop)} for the month (${ex ? 'excl. Outlet & EPR' : 'all shops'}), with ${pos} of ${shops.length} shops projected positive.`;
+
+    // Data checks shown to the reader
+    const d = DATA.dates || {};
+    const salesDate = d.pos_gpa || DATA.as_of, costDates = [...new Set(['pickup_gpa', 'tm_cost', 'office_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex'].map((k) => d[k]).filter(Boolean))];
+    $('dop-dates').textContent = costDates.length ? `POS sales, disposal and marketing up to ${salesDate}; pickup GPA and other costs up to ${costDates.join(', ')}.` : `Month to date up to ${DATA.as_of}.`;
+    const checks = [];
+    if (costDates.some((c) => c !== salesDate)) checks.push(`Dates don't match in the source: POS sales are up to ${salesDate} but most costs are up to ${costDates.join(', ')}. DOP and projected DOP include an extra day of costs without that day's sales, so they look worse than they are until the sheet catches up.`);
+    const high = shops.filter((r) => r.pos_gp_pct > GP_FLAG);
+    if (high.length) checks.push(`Unusually high POS GP% (over ${d3.format('.0%')(GP_FLAG)}): ${high.map((r) => `${r.shop_code} ${d3.format('.1%')(r.pos_gp_pct)}`).join(', ')}. Most shops are 21–33%, so these may include a rebate or claim booked to the shop. Marked ⚠ below.`);
+    const box = $('dop-checks'); box.hidden = !checks.length;
+    if (checks.length) {
+      const h = document.createElement('b'); h.textContent = 'Check the source data';
+      const ul = document.createElement('ul'); checks.forEach((c) => { const li = document.createElement('li'); li.textContent = c; ul.appendChild(li); });
+      box.replaceChildren(h, ul);
+    }
 
     drawTable($('dm-table'), dm, teamCols('dm', 'DM', dm));
     drawTable($('am-table'), am, teamCols('am', 'AM', am));
@@ -278,24 +374,50 @@
     const ratio = (r) => { const gp = (r.pos_gpa || 0) + (r.pickup_gpa || 0); return gp ? (r.tm_cost || 0) / gp : null; };
     drawTable($('shop-table'), rows, [
       { key: 'shop_code', label: 'Shop' }, { key: 'shop_name', label: 'Name', cls: 'l' }, { key: 'am', label: 'AM', cls: 'l' },
-      { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'pos_gp_pct', label: 'GP%', fmt: fmtP }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN },
-      { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'tm_to_gp', label: 'TM / GP', fmt: fmtP, get: ratio },
+      { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'pos_gp_pct', label: 'GP%', fmt: fmtP, flag: (r) => r.pos_gp_pct > GP_FLAG }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN },
+      { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'disposal_cost', label: 'Disposal', fmt: fmtN }, { key: 'other_mkt_cost', label: 'Other & MKT', fmt: fmtN },
+      { key: 'tm_to_gp', label: 'TM / GP', fmt: fmtP, get: ratio },
       { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true, bar: { max } },
     ]);
-    $('shop-count').textContent = `${rows.length} shops shown. Click a column to sort. TM / GP = frontline TM cost ÷ (POS GPA + pickup GPA).`;
+    $('shop-count').textContent = `${rows.length} shops shown. Click a column to sort. TM / GP = frontline TM cost ÷ (POS GPA + pickup GPA). The scope switch above changes the totals and DM/AM tables only; this list always includes every shop.`;
     drawRank($('rank'), rows);
+  }
 
+  function drawTm() {
+    const tm = DATA.tm || [];
+    const cur = d3.sum(tm, (r) => r.total_cost || 0), proj = d3.sum(tm, (r) => r.roster_total_cost || 0), bud = DATA.tm_budget;
+    const list = [
+      ['Current TM cost', fmtK(cur), { hint: 'So far this month' }],
+      ['Projected TM cost', fmtK(proj), { hint: 'Full month, from roster' }],
+    ];
+    if (bud != null) {
+      list.push(['TM budget', fmtK(bud), { hint: DATA.month }]);
+      const diff = proj - bud;
+      list.push(['Projected vs budget', (diff > 0 ? '+' : '') + fmtK(diff), { bad: diff > 0, good: diff <= 0, hint: diff > 0 ? 'Over budget' : 'Under budget' }]);
+    }
+    list.push(['Shops', fmtN(tm.length)]);
+    tiles($('tm-kpis'), list);
     drawMix($('mix'), tm);
-    const tmRows = tm.filter((r) => !q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q));
-    drawTable($('tm-table'), tmRows, [
+    const q = tmSearch.value.trim().toLowerCase();
+    const rows = tm.filter((r) => !q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q));
+    drawTable($('tm-table'), rows, [
       { key: 'shop', label: 'Shop' }, { key: 'shop_name', label: 'Name', cls: 'l' },
-      { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASSP', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
+      { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASS', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
       { key: 'pt_hours', label: 'PT hrs', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs', fmt: fmtH },
-      { key: 'ss_sa_with_oh', label: 'SS+SA ×1.15', fmt: fmtN }, { key: 'pt_cost', label: 'PT cost', fmt: fmtN }, { key: 'os_cost', label: 'OS cost', fmt: fmtN },
-      { key: 'total_cost', label: 'Shop total', fmt: fmtN }, { key: 'roster_total_cost', label: 'Roster month', fmt: fmtN },
+      { key: 'ss_sa_with_oh', label: 'SS+ASS+SA ×1.15', fmt: fmtN }, { key: 'pt_cost', label: 'PT cost', fmt: fmtN }, { key: 'os_cost', label: 'OS cost', fmt: fmtN },
+      { key: 'total_cost', label: 'Current TM cost', fmt: fmtN },
+      { key: 'roster_total_cost', label: 'Projected TM cost', fmt: fmtN },
+      { key: 'proj_gap', label: 'Projected − current', fmt: fmtN, get: (r) => (r.roster_total_cost == null || r.total_cost == null) ? null : r.roster_total_cost - r.total_cost },
     ]);
   }
-  window.addEventListener('resize', () => draw());
+
+  function draw() {
+    if (!DATA) return;
+    $('updated').textContent = `${DATA.month} · data refreshed ${DATA.generated_at} from the DOP and TM cost Google Sheets.`;
+    if (current === 'dop') drawDop();
+    if (current === 'tm') drawTm();
+  }
+  let rT; window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(draw, 150); });
 })();
 </script>
 </body>

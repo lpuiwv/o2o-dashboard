@@ -47,6 +47,8 @@ TEAM_KEYS = ["pos_gmv", "pos_gpa", "gp_pct", "pickup_gpa", "tm_cost", "office_co
 
 def parse_team(values, name_key):
     as_of = values[1][1] if len(values) > 1 and len(values[1]) > 1 else ""
+    date_row = values[1] if len(values) > 1 else []
+    dates = {k: (date_row[i + 1] if i + 1 < len(date_row) else "") for i, k in enumerate(TEAM_KEYS)}
     rows = []
     for r in values[2:]:
         if not r or not str(r[0]).strip():
@@ -55,7 +57,7 @@ def parse_team(values, name_key):
         for i, k in enumerate(TEAM_KEYS):
             row[k] = num(r[i + 1]) if i + 1 < len(r) else None
         rows.append(row)
-    return rows, as_of
+    return rows, as_of, dates
 
 
 SHOP_COLS = ["shop_code", "shop_name", "am", "dm", "pos_gpa", "pos_gp_pct", "pickup_gpa", "tm_cost",
@@ -101,6 +103,8 @@ def tabs_for(d):
     return {
         "dm": (DOP_SHEET, f"'Summary - {mon}'!A1:O5"),
         "am": (DOP_SHEET, f"'Summary - {mon}'!A8:O15"),
+        "dm_ex": (DOP_SHEET, f"'Summary - {mon}'!A18:O22"),
+        "am_ex": (DOP_SHEET, f"'Summary - {mon}'!A25:O32"),
         "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:L150"),
         "tm": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A2:AF200"),
         "_month": d.strftime("%B %Y"),
@@ -135,7 +139,21 @@ def fetch_month(get, d):
     t = tabs_for(d)
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_")}
     out["_month"] = t["_month"]
+    out["_date"] = d
     return out
+
+
+def fetch_budget(get, d):
+    """Monthly frontline TM budget from the 'TM Cost Budget ' tab (optional)."""
+    try:
+        v = get(TM_SHEET, "'TM Cost Budget '!A1:M3")
+        head, budget = v[0], v[2]
+        for i, h in enumerate(head):
+            if i and str(h).strip().startswith(d.strftime("%b")):
+                return num(budget[i]) if i < len(budget) else None
+    except Exception as e:
+        print(f"Budget not read: {e}", file=sys.stderr)
+    return None
 
 
 def fetch_all():
@@ -146,8 +164,10 @@ def fetch_all():
     except Exception as e:  # new month's tabs not created yet -> use last month
         print(f"This month's tabs not ready ({e}); falling back to last month", file=sys.stderr)
         raw = fetch_month(get, today.replace(day=1) - dt.timedelta(days=1))
-    dm, as_of = parse_team(raw["dm"], "dm")
-    am, _ = parse_team(raw["am"], "am")
+    dm, as_of, dates = parse_team(raw["dm"], "dm")
+    am, _, _ = parse_team(raw["am"], "am")
+    dm_ex, _, _ = parse_team(raw["dm_ex"], "dm")
+    am_ex, _, _ = parse_team(raw["am_ex"], "am")
     shops = parse_shops(raw["shops"])
     tm = parse_tm(raw["tm"])
     if not dm or not shops:
@@ -155,6 +175,9 @@ def fetch_all():
     return {
         "month": raw["_month"],
         "as_of": as_of,
+        "dates": dates,
+        "tm_budget": fetch_budget(get, raw["_date"]),
+        "dm_ex": dm_ex, "am_ex": am_ex,
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }

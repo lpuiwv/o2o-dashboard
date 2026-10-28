@@ -96,7 +96,7 @@
 <div class="lock" id="lock">
   <form id="unlock">
     <h1>O2O Dashboard (Shop ver.)</h1>
-    <p class="note">Internal data. Enter the dashboard password to open it.</p>
+    <p class="note">內部資料，請輸入密碼。</p>
     <input id="pw" type="password" autocomplete="current-password" aria-label="Password" placeholder="Password" required>
     <button type="submit">Open dashboard</button>
     <p class="err" id="err"></p>
@@ -114,7 +114,7 @@
     <button role="tab" id="tab-tm" data-tab="tm" aria-selected="false">TM cost</button>
     <button role="tab" id="tab-pos" data-tab="pos" aria-selected="false">POS achievement</button>
     <button role="tab" id="tab-discount" data-tab="discount" aria-selected="false">Manual Discount</button>
-    <span class="tierbox" id="tier-bar"><label class="note" for="tier-filter">Shop tier</label>
+    <span class="tierbox" id="tier-bar"><label class="note" for="tier-filter">Shop tier 篩選</label>
     <select id="tier-filter" aria-label="Filter by shop tier"><option value="">All tiers</option></select></span>
   </nav>
   <p class="note" id="tier-note"></p>
@@ -126,7 +126,7 @@
       <p class="sub" id="takeaway"></p>
       <p class="note" id="dop-dates" hidden></p>
       <div class="ctrl">
-        <span class="note">Scope</span>
+        <span class="note">範圍</span>
         <div class="seg" role="group" aria-label="Scope">
           <button id="scope-ex" aria-pressed="true">Excl. Outlet &amp; EPR</button>
           <button id="scope-all" aria-pressed="false">All shops</button>
@@ -139,17 +139,17 @@
     <div class="sec">
       <h2>By DM and AM</h2>
       <div class="ctrl">
-        <span class="note">Show</span>
+        <span class="note">顯示</span>
         <div class="seg" role="group" aria-label="Totals or per-shop average">
           <button id="mode-total" aria-pressed="true">Total</button>
           <button id="mode-avg" aria-pressed="false">Average per shop</button>
         </div>
       </div>
       <div class="stack">
-        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs. 100% commission target and the commission levels come from the "<Mon> Target %" tab; Commission now = the highest level the Target tab's projected DOP reaches (0% below the 50% level). Projected DOP, achievement and difference come from the Target tab (excludes outlets; it projects with its own day count).</p><div class="scroll"><table id="dm-table"></table></div></div>
-        <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × days in month ÷ days of POS sales, as in the source sheet. DOP ach. % follows the Target tab: projected DOP ÷ target, or target ÷ projected DOP when the target is negative.</p><div class="scroll"><table id="am-table"></table></div></div>
-        <div class="card" id="vs-target-card"><h3>Projected DOP vs 100% commission target</h3><p class="note">Projected DOP from the Target tab (without outlets) against each DM's and AM's 100% commission target. Red = below target, green = at or above. The gap is written at the end of each row.</p><div class="chart" id="vs-target-chart"></div></div>
-        <div class="card"><h3>Shop count by DM and AM</h3><p class="note">Shops in the current scope, and how many are projected to end the month with positive DOP.</p><div class="scroll"><table id="count-table"></table></div></div>
+        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − 前線 TM、office、disposal、租金、營運、倉庫及物流、capex 同 marketing 成本。100% commission target 同 commission 級別來自「（月份）Target %」tab；Commission now = Target tab 預計 DOP 做到嘅最高級別（低過 50% 級別即 0%）。Projected DOP、達標 % 同差距來自 Target tab（唔計 outlet，用 Target tab 自己嘅日數推算）。</p><div class="scroll"><table id="dm-table"></table></div></div>
+        <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × 當月日數 ÷ 已有 POS 銷售嘅日數，同 Sheet 一樣。DOP ach. % 跟 Target tab 計法：預計 DOP ÷ target；target 係負數時用 target ÷ 預計 DOP。</p><div class="scroll"><table id="am-table"></table></div></div>
+        <div class="card" id="vs-target-card"><h3>Projected DOP vs 100% commission target</h3><p class="note">用 Target tab 嘅預計 DOP（唔計 outlet）對比每個 DM / AM 嘅 100% commission target。紅色 = 未達標，綠色 = 達標或以上；每行最右係差距。</p><div class="chart" id="vs-target-chart"></div></div>
+        <div class="card"><h3>Shop count by DM and AM</h3><p class="note">而家範圍內嘅舖數，同預計月底 DOP 係正數嘅舖數。</p><div class="scroll"><table id="count-table"></table></div></div>
       </div>
     </div>
 
@@ -157,10 +157,10 @@
       <h2>Shop DOP ranking</h2>
       <div class="ctrl">
         <select id="am-filter" aria-label="Filter by AM"></select>
-        <input id="search" type="search" placeholder="Search shop code or name" aria-label="Search shops">
+        <input id="search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops">
       </div>
       <div class="grid">
-        <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">Full-month projection, HK$. The dashed orange line is the average per shop. Hover a bar for details.</p><div class="chart" id="rank"></div></div>
+        <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">全月預計，HK$。橙色虛線係每間舖平均；滑鼠指住條 bar 睇詳情。</p><div class="chart" id="rank"></div></div>
         <div class="card"><h3>All shops</h3><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
       </div>
     </div>
@@ -169,25 +169,25 @@
   <!-- TM cost -->
   <section class="pane" id="tm" role="tabpanel" aria-labelledby="tab-tm" hidden>
     <div class="stamp" id="stamp-tm"></div>
-    <div class="callout plain"><b>How the cost is counted</b>Each cost is basic + non-basic pay, plus: 15% overhead for DM, AM, UM, SS, ASS and SA · 7% for PT (plus $1,000 per 468PT) · $1,000 transport allowance for SA–UM at the remote shops. OT is $60/hour and outsource is $65/hour.</div>
+    <div class="callout plain"><b>成本點計</b>每項成本 = basic + non-basic，再加：DM、AM、UM、SS、ASS、SA 加 15% overhead · PT 加 7%（468PT 每人另加 $1,000）· 偏遠店 SA–UM 有 $1,000 交通津貼。OT 每小時 $60，外判每小時 $65。</div>
     <div class="tiles" id="tm-kpis"></div>
     <div class="grid">
-      <div class="card"><h3>Where the TM cost goes</h3><p class="note">All shops, current TM cost by group, HK$. DM, AM and UM are combined in the source sheet; UM will move to the UM + SS line once the UM split is added.</p><div class="mix" id="mix"></div></div>
+      <div class="card"><h3>Where the TM cost goes</h3><p class="note">全部舖目前嘅 TM cost 按組別分，HK$。Source sheet 將 DM、AM、UM 合埋計；有 UM 拆分資料之後，UM 會搬去「UM + SS」。</p><div class="mix" id="mix"></div></div>
       <div class="card">
         <h3>TM cost by shop</h3>
-        <p class="note">Costs include overhead as above. Projected TM cost = full-month cost per shop based on the roster.</p>
-        <div class="ctrl"><input id="tm-search" type="search" placeholder="Search shop code or name" aria-label="Search shops"></div>
+        <p class="note">成本已包上面講嘅 overhead。Projected TM cost = 按 roster 計每間舖全月成本。</p>
+        <div class="ctrl"><input id="tm-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table"></table></div>
       </div>
       <div class="card" id="tm-daily-card">
         <h3>Daily TM cost</h3>
-        <p class="note">Overall frontline TM cost per day (FT, PT, outsource and overheads), summed from each shop's daily "TM Cost (Frontline)" in the DOP bot sheet. "vs yesterday" compares with the day before (an increase is red). "Of which PT + OS" is that day's PT (incl. 7%) and outsource cost from the TM cost sheet, shown for all shops only. In the chart the darker part of each bar is PT + OS.</p>
+        <p class="note">每日整體前線 TM cost（FT、PT、外判同 overhead），由 DOP bot Sheet 每間舖每日嘅「TM Cost (Frontline)」加埋。「vs yesterday」同前一日比（增加係紅色）。「Of which PT + OS」係 TM cost Sheet 當日 PT（包 7%）同外判成本，只有全部舖嘅數。圖入面每條 bar 深色部分係 PT + OS。</p>
         <div class="chart" id="tm-daily-chart"></div>
         <div class="scroll"><table id="tm-daily-table"></table></div>
       </div>
       <div class="card">
         <h3>Staff cost distribution by shop</h3>
-        <p class="note">Each group's share of the shop's current TM cost. The four shares add up to 100%.</p>
+        <p class="note">每組佔該舖目前 TM cost 嘅 %，四項加埋 = 100%。</p>
         <div class="scroll"><table id="dist-table"></table></div>
       </div>
     </div>
@@ -198,18 +198,18 @@
     <div class="stamp" id="stamp-pos"></div>
     <div class="wait" id="pos-missing" hidden>
       <h2>POS achievement</h2>
-      <p>No POS target data yet. It comes from the O2O POS Target (Tableau) Google Sheet.</p>
+      <p>未有 POS target 數據，資料來自 O2O POS Target (Tableau) Google Sheet。</p>
     </div>
     <div class="sec" id="pos-body">
       <p class="note" id="pos-note"></p>
       <div class="tiles" id="pos-kpis"></div>
       <div class="grid">
-        <div class="card"><h3>DM target achievement</h3><p class="note">POS GMV vs monthly target, summed from each DM's shops that have a target (Σ GMV ÷ Σ target). Projected achievement extends month-to-date GMV to the full month.</p><div class="scroll"><table id="pos-dm-table"></table></div></div>
-        <div class="card"><h3>AM target achievement</h3><p class="note">POS GMV vs monthly target by AM, summed from the AM's shops that have a target. Shops without a target are left out, so an AM with one can differ slightly from Tableau.</p><div class="scroll"><table id="pos-am-table"></table></div></div>
-        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV includes MKT fund and RM discount. Shops with no target this month (e.g. KSE) are listed for reference but left out of every total.</p>
-          <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="Search shop code or name" aria-label="Search shops"></div>
+        <div class="card"><h3>DM target achievement</h3><p class="note">POS GMV 對比月 target，將每個 DM 有 target 嘅舖加埋（Σ GMV ÷ Σ target）。預計達標 = 按月初至今 GMV 推算全月。</p><div class="scroll"><table id="pos-dm-table"></table></div></div>
+        <div class="card"><h3>AM target achievement</h3><p class="note">按 AM 計 POS GMV 對比月 target，只計有 target 嘅舖；所以有冇 target 舖嘅 AM，數字會同 Tableau 有少少唔同。</p><div class="scroll"><table id="pos-am-table"></table></div></div>
+        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV 包 MKT fund 同 RM discount。今個月冇 target 嘅舖（例如 KSE）只列出參考，唔計入任何合計。</p>
+          <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="pos-table"></table></div></div>
-        <div class="card"><h3>Projected achievement by shop</h3><p class="note">Sorted high to low, same filters as the table above. The dashed line is 100% of target.</p><div class="chart" id="pos-chart"></div></div>
+        <div class="card"><h3>Projected achievement by shop</h3><p class="note">由高至低排，用同上面個表一樣嘅篩選。虛線 = target 100%。</p><div class="chart" id="pos-chart"></div></div>
       </div>
     </div>
   </section>
@@ -218,8 +218,8 @@
   <section class="pane" id="discount" role="tabpanel" aria-labelledby="tab-discount" hidden>
     <div class="wait">
       <h2>Manual Discount</h2>
-      <p>Manual discount by shop comes from the Tableau report <i>O2O Report › Manual Discount</i>.</p>
-      <p>Same as POS achievement: once the data is in a Google Sheet tab, this tab will show it.</p>
+      <p>每間舖嘅 Manual discount 來自 Tableau 報表 <i>O2O Report › Manual Discount</i>。</p>
+      <p>同 POS achievement 一樣，數據放入 Google Sheet 之後就會喺呢度顯示。</p>
     </div>
   </section>
 </div>
@@ -250,7 +250,7 @@
       $('lock').hidden = true; $('app').hidden = false;
       showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dop');
     } catch (e) {
-      if (!quiet) $('err').textContent = e.message === 'nofile' ? 'Data file not found. The daily update may not have run yet.' : 'Wrong password. Please try again.';
+      if (!quiet) $('err').textContent = e.message === 'nofile' ? '搵唔到數據檔，可能今日未更新。' : '密碼錯誤，請再試。';
     }
   }
   $('unlock').addEventListener('submit', (e) => { e.preventDefault(); $('err').textContent = ''; unlock($('pw').value, false); });
@@ -307,7 +307,7 @@
         if (c.freeze) td.classList.add('fz');
         if (c.sign && v != null) td.classList.add(v < 0 ? 'neg' : 'pos');
         if (c.tone) { const k = c.tone(v); if (k) td.classList.add(k); }
-        if (c.flag && c.flag(r)) { td.classList.add('flag'); td.textContent += ' ⚠'; td.title = 'Unusually high GP% — please check the source data'; }
+        if (c.flag && c.flag(r)) { td.classList.add('flag'); td.textContent += ' ⚠'; td.title = 'GP% 異常高，請檢查 source 數據'; }
         if (c.bar && v != null && c.bar.max > 0) {
           const s = document.createElement('span'); s.className = 'bar';
           s.style.width = Math.max(2, Math.round(Math.abs(v) / c.bar.max * 60)) + 'px';
@@ -539,22 +539,22 @@
     t.gp_pct = t.pos_gmv ? t.pos_gpa / t.pos_gmv : null;
     tiles($('kpis'), [
       ['POS GMV (MTD)', fmtK(t.pos_gmv)], ['POS GPA (MTD)', fmtK(t.pos_gpa)], ['POS GP%', fmtP(t.gp_pct)], ['Pickup GPA (MTD)', fmtK(t.pickup_gpa)],
-      ['Frontline TM cost (MTD)', fmtK(t.tm_cost)], ['DOP (MTD)', fmtK(t.dop), { bad: t.dop < 0 }], ['Projected DOP', fmtK(t.proj_dop), { bad: t.proj_dop < 0, hint: 'Full month' }],
+      ['Frontline TM cost (MTD)', fmtK(t.tm_cost)], ['DOP (MTD)', fmtK(t.dop), { bad: t.dop < 0 }], ['Projected DOP', fmtK(t.proj_dop), { bad: t.proj_dop < 0, hint: '全月' }],
     ]);
     const pos = shops.filter((r) => (r.proj_dop || 0) > 0).length;
-    $('takeaway').textContent = `${DATA.month}: projected DOP ${fmtK(t.proj_dop)} for the month (${ex ? 'excl. Outlet & EPR' : 'all shops'}), with ${pos} of ${shops.length} shops projected positive.`;
+    $('takeaway').textContent = `${DATA.month}：全月預計 DOP ${fmtK(t.proj_dop)}（${ex ? '唔計 Outlet 同 EPR' : '全部舖'}），${shops.length} 間舖之中有 ${pos} 間預計 DOP 係正數。`;
 
     // Data checks shown to the reader
     const d = DATA.dates || {};
     const salesDate = d.pos_gpa || DATA.as_of, costDates = [...new Set(['pickup_gpa', 'tm_cost', 'office_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex'].map((k) => d[k]).filter(Boolean))];
     $('dop-dates').textContent = 'Source sheets update every day at 2pm; this dashboard refreshes at 2:30pm. ' + (costDates.length ? `POS sales, disposal and marketing up to ${salesDate}; pickup GPA and other costs up to ${costDates.join(', ')}.` : `Month to date up to ${DATA.as_of}.`);
     const checks = [];
-    if (costDates.some((c) => c !== salesDate)) checks.push(`Dates don't match in the source: POS sales are up to ${salesDate} but most costs are up to ${costDates.join(', ')}. DOP and projected DOP include an extra day of costs without that day's sales, so they look worse than they are until the sheet catches up.`);
+    if (costDates.some((c) => c !== salesDate)) checks.push(`Source 日期唔一致：POS 銷售計到 ${salesDate}，但大部分成本計到 ${costDates.join(', ')}。DOP 同預計 DOP 多計咗一日成本但未計嗰日銷售，所以會睇落差過實際，等 Sheet 追返就會正常。`);
     const high = shops.filter((r) => r.pos_gp_pct > GP_FLAG);
-    if (high.length) checks.push(`Unusually high POS GP% (over ${d3.format('.0%')(GP_FLAG)}): ${high.map((r) => `${r.shop_code} ${d3.format('.1%')(r.pos_gp_pct)}`).join(', ')}. Most shops are 21–33%, so these may include a rebate or claim booked to the shop. Marked ⚠ below.`);
+    if (high.length) checks.push(`POS GP% 異常高（超過 ${d3.format('.0%')(GP_FLAG)}）：${high.map((r) => `${r.shop_code} ${d3.format('.1%')(r.pos_gp_pct)}`).join('、')}。大部分舖係 21–33%，可能計咗 rebate 或 claim 入呢間舖。下面用 ⚠ 標示。`);
     const box = $('dop-checks'); box.hidden = !checks.length;
     if (checks.length) {
-      const h = document.createElement('b'); h.textContent = 'Check the source data';
+      const h = document.createElement('b'); h.textContent = '請檢查 source 數據';
       const ul = document.createElement('ul'); checks.forEach((c) => { const li = document.createElement('li'); li.textContent = c; ul.appendChild(li); });
       box.replaceChildren(h, ul);
     }
@@ -594,7 +594,7 @@
       { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true },
       { key: 'vs_avg', label: 'Proj. DOP vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
     ]);
-    $('shop-count').textContent = `${rows.length} shops shown. Click a column to sort. TM / GP = frontline TM cost ÷ (POS GPA + pickup GPA). The average per shop is the baseline: "vs avg" shows how far each shop is above or below it. Excl. Outlet & EPR hides SWH, CHE and EPR.`;
+    $('shop-count').textContent = `顯示 ${rows.length} 間舖。撳欄名可以排序。TM / GP = 前線 TM cost ÷ (POS GPA + pickup GPA)。以每間舖平均做 baseline，「vs avg」顯示每間舖高過或低過平均幾多。「Excl. Outlet & EPR」唔計 SWH、CHE 同 EPR。`;
     drawRank($('rank'), rows, avgRow.proj_dop);
 
   }
@@ -635,11 +635,11 @@
     const ts = P.shops.filter((r) => hasTarget(r) && passTier(r.shop_code)); const sm = (k) => d3.sum(ts, (r) => r[k] || 0);
     const t = { target: sm('target'), pos_gmv: sm('pos_gmv'), proj_gmv: sm('proj_gmv') };
     t.current_ach = t.target ? t.pos_gmv / t.target : null; t.proj_ach = t.target ? t.proj_gmv / t.target : null;
-    $('pos-note').textContent = `From Tableau (O2O Report › Shop Monthly Target), ${P.period}. Tableau last update ${P.tableau_updated || P.exported_at}; refreshed daily at 10:07.` + (noTarget.length ? ` ${noTarget.join(', ')} ${noTarget.length > 1 ? 'have' : 'has'} no target this month, so ${noTarget.length > 1 ? 'they are' : 'it is'} not counted in any POS total or achievement (Tableau's own totals include ${noTarget.length > 1 ? 'them' : 'it'}).` : '');
+    $('pos-note').textContent = `來自 Tableau（O2O Report › Shop Monthly Target），${P.period}。每日 10:07 更新。` + (noTarget.length ? ` ${noTarget.join('、')} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）。` : '');
     tiles($('pos-kpis'), [
-      ['POS GMV target', fmtK(t.target), { hint: 'Month' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: 'Month to date' }],
+      ['POS GMV target', fmtK(t.target), { hint: '全月' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: '月初至今' }],
       ['Current achievement', fmtP(t.current_ach)], ['Projected POS GMV', fmtK(t.proj_gmv)],
-      ['Projected achievement', fmtP(t.proj_ach), { good: t.proj_ach >= 1, bad: t.proj_ach < 0.8, hint: t.proj_ach >= 1 ? 'On track' : 'Below target' }],
+      ['Projected achievement', fmtP(t.proj_ach), { good: t.proj_ach >= 1, bad: t.proj_ach < 0.8, hint: t.proj_ach >= 1 ? '預計達標' : '預計未達標' }],
     ]);
     // DM and AM achievement from the shop rows (follows the tier filter); Σ GMV ÷ Σ target
     const inTier = ts;
@@ -687,13 +687,13 @@
     const tm = (DATA.tm || []).filter((r) => passTier(r.shop));
     const cur = d3.sum(tm, (r) => r.total_cost || 0), proj = d3.sum(tm, (r) => r.roster_total_cost || 0), bud = DATA.tm_budget;
     const list = [
-      ['Current TM cost', fmtK(cur), { hint: 'So far this month' }],
-      ['Projected TM cost', fmtK(proj), { hint: 'Full month, from roster' }],
+      ['Current TM cost', fmtK(cur), { hint: '月初至今' }],
+      ['Projected TM cost', fmtK(proj), { hint: '全月，按 roster 計' }],
     ];
     if (bud != null) {
       list.push(['TM budget', fmtK(bud), { hint: DATA.month }]);
       const diff = proj - bud;
-      list.push(['Projected vs budget', (diff > 0 ? '+' : '') + fmtK(diff), { bad: diff > 0, good: diff <= 0, hint: diff > 0 ? 'Over budget' : 'Under budget' }]);
+      list.push(['Projected vs budget', (diff > 0 ? '+' : '') + fmtK(diff), { bad: diff > 0, good: diff <= 0, hint: diff > 0 ? '超出 budget' : '低過 budget' }]);
     }
     list.push(['Shops', fmtN(tm.length)]);
     tiles($('tm-kpis'), list);
@@ -765,9 +765,9 @@
     const st = DATA.stamps || {};
     const days = Object.keys(DATA.tm_by_day || {}); const lastIso = days.length ? days[days.length - 1] : ''; const lastDay = lastIso ? `${lastIso.slice(8, 10)}/${lastIso.slice(5, 7)}/${lastIso.slice(0, 4)}` : '';
     const P = DATA.pos || {};
-    stamp('stamp-dop', [['POS sales up to', d.pos_gpa || DATA.as_of], ['Pickup & costs up to', costs], ['Source updates', 'daily 2pm'], ['Dashboard refreshed', DATA.generated_at]]);
-    stamp('stamp-tm', [['TM cost sheet version', st.tm_version], ['Daily TM cost up to', lastDay], ['PT & outsource sheet generated', st.tm_daily_generated], ['Dashboard refreshed', DATA.generated_at]]);
-    stamp('stamp-pos', [['Tableau last update', P.tableau_updated], ['Data period', P.period], ['Copied from Tableau', P.exported_at], ['Dashboard refreshed', DATA.generated_at]]);
+    stamp('stamp-dop', [['POS 銷售計到', d.pos_gpa || DATA.as_of], ['Pickup 同成本計到', costs], ['Source 更新', '每日下午 2 點'], ['Dashboard 更新', DATA.generated_at]]);
+    stamp('stamp-tm', [['TM cost Sheet 版本', st.tm_version], ['每日 TM cost 計到', lastDay], ['PT 外判 Sheet 產生', st.tm_daily_generated], ['Dashboard 更新', DATA.generated_at]]);
+    stamp('stamp-pos', [['Tableau 最後更新', P.tableau_updated], ['數據期間', P.period], ['由 Tableau 抄入', P.exported_at], ['Dashboard 更新', DATA.generated_at]]);
   }
 
   function draw() {
@@ -776,8 +776,8 @@
     const tiers = [...new Set(Object.values(DATA.tiers || {}))].sort();
     if (tierSel.options.length !== tiers.length + 2) { const v = tierSel.value; tierSel.replaceChildren(new Option('All tiers', ''), ...tiers.map((x) => new Option(x, x)), new Option('No tier', 'No tier')); tierSel.value = v; }
     document.getElementById('tier-bar').hidden = !tiers.length;
-    document.getElementById('tier-note').hidden = !tierSel.value; document.getElementById('tier-note').textContent = tierSel.value ? 'Applies to shop tables, shop charts, shop counts, TM cost and POS figures. The DM / AM summary rows, DOP tiles and daily TM cost are all-shop totals from the sheets.' : '';
-    $('updated').textContent = `${DATA.month} · data refreshed ${DATA.generated_at} from the DOP and TM cost Google Sheets.`;
+    document.getElementById('tier-note').hidden = !tierSel.value; document.getElementById('tier-note').textContent = tierSel.value ? 'Tier 篩選會套用喺所有舖嘅表、圖、舖數、TM cost 同 POS 數字。DM / AM summary、DOP 頂部數字仍然係 Sheet 嘅全部舖合計。' : '';
+    $('updated').textContent = `${DATA.month} · ${DATA.generated_at} 由 DOP 同 TM cost Google Sheet 更新`;
     if (current === 'dop') drawDop();
     if (current === 'tm') drawTm();
     if (current === 'pos') drawPos();

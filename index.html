@@ -175,8 +175,8 @@
         <div class="scroll"><table id="tm-table"></table></div>
       </div>
       <div class="card" id="tm-daily-card">
-        <h3>Daily TM cost (PT + outsource)</h3>
-        <p class="note">Single-day cost of PT / 468PT (incl. 7%) and outsource, all shops, from the daily PT & outsource sheet (data to yesterday). FT salaries are monthly, so they are not in the daily figure. "vs yesterday" compares with the day before; "vs roster" compares with that day's roster budget. In the chart the dashed orange line is the roster budget; red bars are over it.</p>
+        <h3>Daily TM cost</h3>
+        <p class="note">Overall frontline TM cost per day (FT, PT, outsource and overheads), summed from each shop's daily "TM Cost (Frontline)" in the DOP bot sheet. "vs yesterday" compares with the day before (an increase is red). "Of which PT + OS" is that day's PT (incl. 7%) and outsource cost from the TM cost sheet, shown for all shops only. In the chart the darker part of each bar is PT + OS.</p>
         <div class="chart" id="tm-daily-chart"></div>
         <div class="scroll"><table id="tm-daily-table"></table></div>
       </div>
@@ -601,16 +601,15 @@
     if (!days.length || !el.clientWidth) return;
     const W = el.clientWidth, H = 200, m = { t: 12, r: 8, b: 24, l: 48 };
     const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('font-size', 10.5).style('font-family', 'var(--sans)');
-    const x = d3.scaleBand(days.map((d) => d.date), [m.l, W - m.r]).padding(0.25);
-    const y = d3.scaleLinear([0, d3.max(days, (d) => Math.max(d.total || 0, d.budget_total || 0)) || 1], [H - m.b, m.t]).nice();
+    const x = d3.scaleBand(days.map((d) => d.label), [m.l, W - m.r]).padding(0.25);
+    const y = d3.scaleLinear([0, d3.max(days, (d) => Math.max(d.total, d.ptos || 0)) || 1], [H - m.b, m.t]).nice();
     svg.append('g').selectAll('line').data(y.ticks(4)).join('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y).attr('y2', y).style('stroke', 'var(--grid)');
     svg.append('g').selectAll('text').data(y.ticks(4)).join('text').attr('x', m.l - 6).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').style('fill', 'var(--muted)').text(fmtK);
     const step = Math.ceil(days.length / Math.max(1, Math.floor((W - m.l) / 42)));
-    svg.append('g').selectAll('text').data(days.filter((d, i) => i % step === 0)).join('text').attr('x', (d) => x(d.date) + x.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text((d) => d.date);
-    svg.append('g').selectAll('rect').data(days).join('rect').attr('x', (d) => x(d.date)).attr('width', x.bandwidth()).attr('y', (d) => y(d.total || 0)).attr('height', (d) => y(0) - y(d.total || 0)).attr('rx', 2)
-      .style('fill', (d) => d.budget_total != null && d.total > d.budget_total ? 'var(--bad)' : 'var(--accent)').append('title').text((d) => `${d.date}: ${fmtN(d.total)} (roster ${fmtN(d.budget_total)})`);
-    const line = d3.line().x((d) => x(d.date) + x.bandwidth() / 2).y((d) => y(d.budget_total || 0));
-    svg.append('path').datum(days.filter((d) => d.budget_total != null)).attr('d', line).style('fill', 'none').style('stroke', 'var(--warn)').attr('stroke-width', 2).attr('stroke-dasharray', '4 3');
+    svg.append('g').selectAll('text').data(days.filter((d, i) => i % step === 0)).join('text').attr('x', (d) => x(d.label) + x.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text((d) => d.label);
+    svg.append('g').selectAll('rect').data(days).join('rect').attr('x', (d) => x(d.label)).attr('width', x.bandwidth()).attr('y', (d) => y(d.total)).attr('height', (d) => y(0) - y(d.total)).attr('rx', 2)
+      .style('fill', 'var(--accent)').style('opacity', 0.55).append('title').text((d) => `${d.label} ${d.day}: ${fmtN(d.total)}` + (d.ptos != null ? ` (PT + OS ${fmtN(d.ptos)})` : ''));
+    svg.append('g').selectAll('rect').data(days.filter((d) => d.ptos != null)).join('rect').attr('x', (d) => x(d.label)).attr('width', x.bandwidth()).attr('y', (d) => y(d.ptos)).attr('height', (d) => y(0) - y(d.ptos)).attr('rx', 2).style('fill', 'var(--accent)');
   }
 
   function drawTm() {
@@ -628,26 +627,32 @@
     list.push(['Shops', fmtN(tm.length)]);
     tiles($('tm-kpis'), list);
 
-    // Daily PT + outsource cost with change vs the day before
-    const days = (DATA.tm_daily || []).map((d, i, a) => {
+    // Overall daily TM cost (DOP bot Raw, per shop per day), with change vs the day before
+    const tierOn = !!$('tier-filter').value;
+    const ptos = new Map((DATA.tm_daily || []).map((d) => [d.date, d.total]));
+    const wdName = (iso) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(iso + 'T00:00:00').getDay()];
+    const days = Object.entries(DATA.tm_by_day || {}).map(([iso, shopsDay]) => {
+      const total = d3.sum(Object.entries(shopsDay), ([code, v]) => passTier(code) ? v : 0);
+      const label = `${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`;
+      return { iso, label, day: wdName(iso), total, ptos: tierOn ? null : (ptos.get(label) ?? null) };
+    }).map((d, i, a) => {
       const prev = i ? a[i - 1].total : null;
-      return { ...d, pt_all: (d.pt_cost || 0) + (d.pt_levy || 0), vs_prev: prev == null ? null : d.total - prev, vs_prev_pct: prev ? (d.total - prev) / prev : null, vs_budget: d.budget_total == null ? null : d.total - d.budget_total };
+      return { ...d, vs_prev: prev == null ? null : d.total - prev, vs_prev_pct: prev ? (d.total - prev) / prev : null, ptos_share: d.ptos != null && d.total ? d.ptos / d.total : null };
     });
     $('tm-daily-card').hidden = !days.length;
     drawDaily($('tm-daily-chart'), days);
-    const wd = (s) => { const [dd, mm] = s.split('/').map(Number); const y = Number((DATA.month || '').slice(-4)) || new Date().getFullYear(); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(y, mm - 1, dd).getDay()]; };
     const sign = (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v);
-    const mtd = { date: 'Month to date', _pin: true, _cls: 'tot', pt_hours: d3.sum(days, (d) => d.pt_hours || 0), pt_all: d3.sum(days, (d) => d.pt_all), os_hours: d3.sum(days, (d) => d.os_hours || 0), os_cost: d3.sum(days, (d) => d.os_cost || 0), total: d3.sum(days, (d) => d.total || 0), budget_total: d3.sum(days, (d) => d.budget_total || 0) };
-    mtd.vs_budget = mtd.total - mtd.budget_total;
-    drawTable($('tm-daily-table'), days.slice().reverse().concat(days.length ? [mtd] : []), [
-      { key: 'date', label: 'Date', freeze: true }, { key: 'day', label: 'Day', cls: 'l', get: (r) => r._pin ? '' : wd(r.date) },
-      { key: 'pt_hours', label: 'PT hrs', fmt: fmtH }, { key: 'pt_all', label: 'PT cost (incl. 7%)', fmt: fmtN },
-      { key: 'os_hours', label: 'OS hrs', fmt: fmtH }, { key: 'os_cost', label: 'OS cost', fmt: fmtN },
+    const red = (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos');
+    const mtd = { label: 'Month to date', _pin: true, _cls: 'tot', total: d3.sum(days, (d) => d.total), ptos: tierOn ? null : d3.sum(days, (d) => d.ptos || 0) };
+    mtd.ptos_share = mtd.ptos != null && mtd.total ? mtd.ptos / mtd.total : null;
+    const avg = { label: 'Daily average', _pin: true, _cls: 'tot', total: days.length ? mtd.total / days.length : null };
+    drawTable($('tm-daily-table'), days.slice().reverse().concat(days.length ? [avg, mtd] : []), [
+      { key: 'label', label: 'Date', freeze: true }, { key: 'day', label: 'Day', cls: 'l' },
       { key: 'total', label: 'Daily TM cost', fmt: fmtN },
-      { key: 'vs_prev', label: 'vs yesterday', fmt: sign, tone: (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos') },
-      { key: 'vs_prev_pct', label: 'vs yesterday %', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + d3.format('.1%')(v), tone: (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos') },
-      { key: 'budget_total', label: 'Roster budget', fmt: fmtN },
-      { key: 'vs_budget', label: 'vs roster', fmt: sign, tone: (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos') },
+      { key: 'vs_prev', label: 'vs yesterday', fmt: sign, tone: red },
+      { key: 'vs_prev_pct', label: 'vs yesterday %', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + d3.format('.1%')(v), tone: red },
+      { key: 'ptos', label: 'Of which PT + OS', fmt: fmtN },
+      { key: 'ptos_share', label: 'PT + OS share', fmt: fmtP },
     ]);
     drawMix($('mix'), tm);
     const q = tmSearch.value.trim().toLowerCase();

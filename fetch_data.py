@@ -177,6 +177,20 @@ def parse_tm_daily(values):
     return days
 
 
+def parse_tm_by_day(values):
+    """DOP bot 'Raw - <Mon YYYY>': one row per shop per day; column K = TM Cost (Frontline), the shop's full daily TM cost.
+    Returns {date: {shop_code: cost}}."""
+    out = {}
+    for r in values:
+        if len(r) < 11 or not str(r[0]).strip() or not str(r[1]).strip():
+            continue
+        v = num(r[10])
+        if v is None:
+            continue
+        out.setdefault(str(r[0]).strip(), {})[str(r[1]).strip()] = v
+    return dict(sorted(out.items()))
+
+
 def fetch_tiers(get):
     """Shop code -> tier label (optional)."""
     try:
@@ -199,6 +213,7 @@ def tabs_for(d):
         "tm": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A2:AF200"),
         "dop_target": (DOP_SHEET, f"'{d:%b} Target'!A1:H40"),
         "tm_daily": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A2:ZZ4"),
+        "raw": (DOP_SHEET, f"'Raw - {mon}'!A2:K4000"),
         "_month": d.strftime("%B %Y"),
     }
 
@@ -229,7 +244,7 @@ def make_getter():
 
 def fetch_month(get, d):
     t = tabs_for(d)
-    optional = ("dop_target", "tm_daily")
+    optional = ("dop_target", "tm_daily", "raw")
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
     for k in optional:
         try:
@@ -280,6 +295,7 @@ def fetch_all():
         "pos": fetch_pos(get),
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
+        "tm_by_day": parse_tm_by_day(raw.get("raw") or []),
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,

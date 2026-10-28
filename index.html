@@ -30,8 +30,9 @@
   h3 { font-size: 15px; font-weight: 500; margin: 0; }
   .sub { color: var(--muted); margin: 4px 0 0; }
   .note { color: var(--muted); font-size: 12px; margin: 0; }
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); }
   .tabs button { font: inherit; font-weight: 500; background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .tierbox { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 4px 0; white-space: nowrap; }
   .tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
   .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .pane { display: flex; flex-direction: column; gap: 24px; }
@@ -48,9 +49,9 @@
   .fz.edge { box-shadow: 1px 0 0 var(--line); }
   tr.sub td { font-weight: 600; }
   tr.tot td { font-weight: 600; border-top: 2px solid var(--line); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; align-items: start; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .card { padding: 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .scroll { overflow: auto; max-height: 560px; }
+  .scroll { overflow: auto; max-height: 70vh; }
   .scroll.short { max-height: none; }
   table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
   th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -76,6 +77,11 @@
   .callout { background: var(--warn-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
   .callout b { color: var(--warn); font-weight: 600; }
   .callout ul { margin: 0; padding-left: 18px; }
+  .callout.plain { background: var(--panel); color: var(--muted); }
+  .callout.plain b { color: var(--fg); }
+  .mix .row.sub { font-weight: 600; color: var(--muted); }
+  .mix .row.sub .fill { background: var(--muted); }
+  .mix .grp { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-top: 6px; }
   .wait { border: 1px dashed var(--line); border-radius: 10px; padding: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
   .wait p { margin: 0; }
   .lock { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -106,7 +112,10 @@
     <button role="tab" id="tab-tm" data-tab="tm" aria-selected="false">TM cost</button>
     <button role="tab" id="tab-pos" data-tab="pos" aria-selected="false">POS achievement</button>
     <button role="tab" id="tab-discount" data-tab="discount" aria-selected="false">Manual Discount</button>
+    <span class="tierbox" id="tier-bar"><label class="note" for="tier-filter">Shop tier</label>
+    <select id="tier-filter" aria-label="Filter by shop tier"><option value="">All tiers</option></select></span>
   </nav>
+  <p class="note" id="tier-note"></p>
 
   <!-- DOP -->
   <section class="pane" id="dop" role="tabpanel" aria-labelledby="tab-dop">
@@ -134,9 +143,9 @@
         </div>
       </div>
       <div class="stack">
-        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs. POS target, Tableau POS GMV and achievement come from the Tableau Shop Monthly Target report.</p><div class="scroll short"><table id="dm-table"></table></div></div>
-        <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × days in month ÷ days of POS sales, as in the source sheet. Proj. ach. = projected POS GMV ÷ POS target.</p><div class="scroll short"><table id="am-table"></table></div></div>
-        <div class="card"><h3>Shop count by DM and AM</h3><p class="note">Shops in the current scope, and how many are projected to end the month with positive DOP.</p><div class="scroll short"><table id="count-table"></table></div></div>
+        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs. DOP target, its projected DOP, achievement and difference come from the source sheet's monthly Target tab (targets exclude outlets; that tab projects with its own day count).</p><div class="scroll"><table id="dm-table"></table></div></div>
+        <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × days in month ÷ days of POS sales, as in the source sheet. DOP ach. % follows the Target tab: projected DOP ÷ target, or target ÷ projected DOP when the target is negative.</p><div class="scroll"><table id="am-table"></table></div></div>
+        <div class="card"><h3>Shop count by DM and AM</h3><p class="note">Shops in the current scope, and how many are projected to end the month with positive DOP.</p><div class="scroll"><table id="count-table"></table></div></div>
       </div>
     </div>
 
@@ -147,29 +156,34 @@
         <input id="search" type="search" placeholder="Search shop code or name" aria-label="Search shops">
       </div>
       <div class="grid">
-        <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">Full-month projection, HK$. Hover a bar for details.</p><div class="chart" id="rank"></div></div>
+        <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">Full-month projection, HK$. The dashed orange line is the average per shop. Hover a bar for details.</p><div class="chart" id="rank"></div></div>
         <div class="card"><h3>All shops</h3><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
-      </div>
-    </div>
-    <div class="sec" id="dop-target">
-      <h2>POS target achievement by shop</h2>
-      <div class="card">
-        <p class="note" id="dop-target-note"></p>
-        <div class="scroll"><table id="dop-target-table"></table></div>
       </div>
     </div>
   </section>
 
   <!-- TM cost -->
   <section class="pane" id="tm" role="tabpanel" aria-labelledby="tab-tm" hidden>
+    <div class="callout plain"><b>How the cost is counted</b>Each cost is basic + non-basic pay, plus: 15% overhead for DM, AM, UM, SS, ASS and SA · 7% for PT (plus $1,000 per 468PT) · $1,000 transport allowance for SA–UM at the remote shops. OT is $60/hour and outsource is $65/hour.</div>
     <div class="tiles" id="tm-kpis"></div>
     <div class="grid">
-      <div class="card"><h3>Where the TM cost goes</h3><p class="note">All shops, current TM cost by component, HK$. Staff lines are basic salary plus 15% overhead.</p><div class="mix" id="mix"></div></div>
+      <div class="card"><h3>Where the TM cost goes</h3><p class="note">All shops, current TM cost by group, HK$. DM, AM and UM are combined in the source sheet; UM will move to the UM + SS line once the UM split is added.</p><div class="mix" id="mix"></div></div>
       <div class="card">
         <h3>TM cost by shop</h3>
-        <p class="note">Projected TM cost = full-month cost per shop based on the roster.</p>
+        <p class="note">Costs include overhead as above. Projected TM cost = full-month cost per shop based on the roster.</p>
         <div class="ctrl"><input id="tm-search" type="search" placeholder="Search shop code or name" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table"></table></div>
+      </div>
+      <div class="card" id="tm-daily-card">
+        <h3>Daily TM cost (PT + outsource)</h3>
+        <p class="note">Single-day cost of PT / 468PT (incl. 7%) and outsource, all shops, from the daily PT & outsource sheet (data to yesterday). FT salaries are monthly, so they are not in the daily figure. "vs yesterday" compares with the day before; "vs roster" compares with that day's roster budget. In the chart the dashed orange line is the roster budget; red bars are over it.</p>
+        <div class="chart" id="tm-daily-chart"></div>
+        <div class="scroll"><table id="tm-daily-table"></table></div>
+      </div>
+      <div class="card">
+        <h3>Staff cost distribution by shop</h3>
+        <p class="note">Each group's share of the shop's current TM cost. The four shares add up to 100%.</p>
+        <div class="scroll"><table id="dist-table"></table></div>
       </div>
     </div>
   </section>
@@ -184,10 +198,10 @@
       <p class="note" id="pos-note"></p>
       <div class="tiles" id="pos-kpis"></div>
       <div class="grid">
-        <div class="card"><h3>AM target achievement</h3><p class="note">POS GMV vs monthly target. Projected achievement extends month-to-date GMV to the full month.</p><div class="scroll short"><table id="pos-am-table"></table></div></div>
+        <div class="card"><h3>AM target achievement</h3><p class="note">POS GMV vs monthly target. Projected achievement extends month-to-date GMV to the full month.</p><div class="scroll"><table id="pos-am-table"></table></div></div>
         <div class="card"><h3>Projected achievement by shop</h3><p class="note">Sorted high to low. The dashed line is 100% of target.</p><div class="chart" id="pos-chart"></div></div>
       </div>
-      <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV includes MKT fund and RM discount.</p>
+      <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV includes MKT fund and RM discount. KSE has no target yet, so it counts in GMV totals but has no achievement.</p>
         <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="Search shop code or name" aria-label="Search shops"></div>
         <div class="scroll"><table id="pos-table"></table></div></div>
     </div>
@@ -250,7 +264,11 @@
   const fmtP = (v) => v == null ? '' : d3.format('.1%')(v);
   const fmtH = (v) => v == null ? '' : d3.format(',.1f')(v);
   const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const GP_FLAG = 0.4; // POS GP% above this is unusual for a shop
+  const GP_FLAG = 0.4;
+  // Shop tier from the "Tier of shop (by target)" sheet; the filter applies to every shop-level table and chart
+  const tierOf = (code) => (DATA && DATA.tiers && DATA.tiers[code]) || 'No tier';
+  const passTier = (code) => { const t = document.getElementById('tier-filter').value; return !t || tierOf(code) === t; };
+  const tierCol = (k) => ({ key: '_tier', label: 'Tier', cls: 'l', freeze: true, get: (r) => r._pin ? '' : tierOf(r[k]) }); // POS GP% above this is unusual for a shop
 
   function drawTable(table, rows, cols) {
     const st = sortState[table.id] || {};
@@ -324,10 +342,10 @@
     const max = d3.max(rows, (r) => Math.abs(r.proj_dop || 0)) || 0;
     const T = (r) => (tgt && tgt.get(r[k])) || {};
     const extra = tgt ? [
-      { key: 'target', label: 'POS target', fmt: fmtN, get: (r) => T(r).target ?? null },
-      { key: 'tab_gmv', label: 'POS GMV (Tableau)', fmt: fmtN, get: (r) => T(r).gmv ?? null },
-      { key: 'cur_ach', label: 'Ach. %', fmt: fmtP, get: (r) => T(r).target ? T(r).gmv / T(r).target : null },
-      { key: 'proj_ach', label: 'Proj. ach. %', fmt: fmtP, tone: achCls, get: (r) => T(r).target ? T(r).proj / T(r).target : null },
+      { key: 't_target', label: 'DOP target', fmt: fmtN, sign: true, get: (r) => T(r).target ?? null },
+      { key: 't_proj', label: 'Proj. DOP (target sheet)', fmt: fmtN, sign: true, get: (r) => T(r).proj_dop ?? null },
+      { key: 't_ach', label: 'DOP ach. %', fmt: fmtP, tone: achCls, get: (r) => T(r).achievement ?? null },
+      { key: 't_diff', label: 'Diff. to target', fmt: fmtN, sign: true, get: (r) => T(r).difference ?? null },
     ] : [];
     return [{ key: k, label, freeze: true }, ...extra, { key: 'pos_gmv', label: 'POS GMV', fmt: fmtN }, { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'gp_pct', label: 'GP%', fmt: fmtP }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN }, { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'other', label: 'Other costs', fmt: fmtN, get: (r) => ['office_cost', 'disposal_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex', 'mkt_cost'].reduce((t, c) => t + (r[c] || 0), 0) }, { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true, bar: { max } }];
   };
@@ -336,20 +354,31 @@
   // DM / AM table with a shop count, a pinned total row, and an optional per-shop average view
   function drawTeam(table, rows, k, label, shops, ex) {
     const n = d3.rollup(shops, (v) => v.length, (r) => r[k]);
-    const tgt = targetsBy(k, ex) || null;
+    const tgt = dopTargets(k);
     const all = { [k]: mode === 'avg' ? 'All shops' : 'Total', _pin: true, _cls: 'tot', _n: shops.length };
     MONEY.forEach((c) => { all[c] = d3.sum(rows, (r) => r[c] || 0); });
     all.gp_pct = all.pos_gmv ? all.pos_gpa / all.pos_gmv : null;
-    if (tgt) { const o = { target: 0, gmv: 0, proj: 0 }; tgt.forEach((v) => { o.target += v.target; o.gmv += v.gmv; o.proj += v.proj; }); tgt.set(all[k], o); }
+    if (tgt) {
+      const o = { target: DATA.dop_target[k + '_total'] ?? d3.sum([...tgt.values()], (v) => v.target || 0), proj_dop: d3.sum([...tgt.values()], (v) => v.proj_dop || 0) };
+      o.difference = o.proj_dop - o.target; o.achievement = dopAch(o.target, o.proj_dop); tgt.set(all[k], o);
+    }
     let list = rows.map((r) => ({ ...r, _n: n.get(r[k]) || 0 })).concat([all]);
     if (mode === 'avg') {
       list = list.map((r) => { const o = { ...r }; if (r._n) MONEY.forEach((c) => { o[c] = r[c] == null ? null : r[c] / r._n; }); return o; });
-      if (tgt) tgt.forEach((v, key) => { const cnt = key === all[k] ? shops.length : (n.get(key) || 0); if (cnt) tgt.set(key, { target: v.target / cnt, gmv: v.gmv / cnt, proj: v.proj / cnt }); });
+      if (tgt) tgt.forEach((v, key) => { const cnt = key === all[k] ? shops.length : (n.get(key) || 0); if (cnt) tgt.set(key, { ...v, target: v.target / cnt, proj_dop: v.proj_dop / cnt, difference: v.difference / cnt }); });
     }
     const cols = teamCols(k, label, list.filter((r) => !r._pin), tgt);
     cols.splice(1, 0, { key: '_n', label: 'Shops', fmt: fmtN });
     drawTable(table, list, cols);
   }
+
+  // DOP targets by DM or AM from the source sheet's "<Mon> Target" tab (targets exclude outlets)
+  function dopTargets(k) {
+    const T = DATA.dop_target; if (!T || !(T[k] || []).length) return null;
+    return new Map(T[k].map((r) => [r.name, { ...r }]));
+  }
+  // Same rule as the target sheet: a negative target compares target ÷ projection, a positive one projection ÷ target
+  const dopAch = (t, p) => (!t || !p) ? null : (t < 0 ? t / p : p / t);
 
   // POS target / Tableau GMV / projected GMV summed by DM or AM from the shop rows in scope
   function targetsBy(key, ex) {
@@ -362,20 +391,24 @@
     return m;
   }
 
-  function drawRank(el, rows) {
+  function drawRank(el, rows, avg) {
     el.replaceChildren();
     const sorted = rows.filter((r) => r.proj_dop != null).sort((a, b) => b.proj_dop - a.proj_dop);
     if (!sorted.length || !el.clientWidth) return;
     const pick = sorted.length <= 20 ? sorted : [...sorted.slice(0, 10), ...sorted.slice(-10)];
-    const W = el.clientWidth, rowH = 19, top = 8, H = top + pick.length * rowH + 24;
+    const W = el.clientWidth, rowH = 19, top = 18, H = top + pick.length * rowH + 24;
     const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('font-size', 11).style('font-family', 'var(--sans)');
     const probe = svg.append('text').text('WWW 天水圍置富嘉湖店 ⚠'); const labW = Math.min(W * 0.45, probe.node().getComputedTextLength() + 8); probe.remove();
-    const ext = d3.extent(pick, (d) => d.proj_dop);
+    const ext = d3.extent(pick.map((d) => d.proj_dop).concat(avg == null ? [] : [avg]));
     const x = d3.scaleLinear([Math.min(0, ext[0]), Math.max(0, ext[1])], [labW, W - 44]).nice();
     const y = (i) => top + i * rowH;
     svg.append('g').selectAll('line').data(x.ticks(4)).join('line').attr('x1', x).attr('x2', x).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--grid)');
     svg.append('g').selectAll('text').data(x.ticks(4)).join('text').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text(fmtK);
     svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--muted)');
+    if (avg != null) {
+      svg.append('line').attr('x1', x(avg)).attr('x2', x(avg)).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--warn)').attr('stroke-dasharray', '4 3');
+      svg.append('text').attr('x', x(avg)).attr('y', top + 2).attr('dy', '-0.1em').attr('text-anchor', x(avg) > W - 90 ? 'end' : 'start').attr('dx', x(avg) > W - 90 ? -4 : 4).style('fill', 'var(--warn)').text(`Avg ${fmtK(avg)}`);
+    }
     if (pick.length === 20) svg.append('line').attr('x1', 0).attr('x2', W).attr('y1', y(10) - 1).attr('y2', y(10) - 1).style('stroke', 'var(--line)').attr('stroke-dasharray', '3 3');
     svg.append('g').selectAll('text').data(pick).join('text').attr('x', 0).attr('y', (d, i) => y(i) + 13)
       .style('fill', (d) => d.pos_gp_pct > GP_FLAG ? 'var(--warn)' : 'var(--fg)').text((d) => d.shop_code + ' ' + d.shop_name + (d.pos_gp_pct > GP_FLAG ? ' ⚠' : ''));
@@ -396,25 +429,32 @@
       .style('fill', 'var(--muted)').text((d) => fmtK(d.proj_dop));
   }
 
+  // TM cost groups per shop row (staff lines include the 15% overhead)
+  const grp = (r) => {
+    // Split the sheet's SS+SA (with overhead) figure by each group's basic cost, so totals match the sheet exactly
+    const ssB = (r.ss_cost || 0) + (r.assp_cost || 0), saB = r.sa_cost || 0, v = r.ss_sa_with_oh || 0;
+    const g = { mgmt: r.mgmt_overhead || 0, ss: ssB + saB ? v * ssB / (ssB + saB) : 0, sa: ssB + saB ? v * saB / (ssB + saB) : 0, pt: (r.pt_cost || 0) + (r.pt_levy || 0), os: r.os_cost || 0, ot: r.ot_cost || 0, tr: r.transport || 0 };
+    g.ft = g.mgmt + g.ss + g.sa; g.other = g.pt + g.os + g.ot + g.tr; g.total = g.ft + g.other; return g;
+  };
   function drawMix(el, tm) {
-    const s = (k) => d3.sum(tm, (r) => r[k] || 0);
-    const parts = [
-      ['SS / ASS / SA (basic + 15% overhead)', s('ss_sa_with_oh')],
-      ['DM / AM / UM (basic + 15% overhead)', s('mgmt_overhead')],
-      ['PT / 468PT (incl. 7% + 468PT $1,000)', s('pt_cost') + s('pt_levy')],
-      ['Outsource', s('os_cost')], ['Transport allowance', s('transport')], ['OT', s('ot_cost')],
-    ].sort((a, b) => b[1] - a[1]);
-    const max = d3.max(parts, (p) => p[1]) || 1, total = d3.sum(parts, (p) => p[1]);
-    const totalRow = document.createElement('div'); totalRow.className = 'row total';
-    const tl = document.createElement('span'); tl.textContent = 'Total TM cost'; const tg = document.createElement('div');
-    const tv = document.createElement('span'); tv.textContent = `${fmtN(total)} · 100%`; totalRow.append(tl, tg, tv);
-    el.replaceChildren(...parts.map(([name, v]) => {
-      const row = document.createElement('div'); row.className = 'row';
+    const G = tm.map(grp); const s = (k) => d3.sum(G, (g) => g[k]);
+    const total = s('total');
+    const items = [
+      ['g', 'Full-time (FT)'], ['i', 'DM + AM + UM', s('mgmt')], ['i', 'SS + ASS', s('ss')], ['i', 'SA', s('sa')], ['s', 'FT subtotal', s('ft')],
+      ['g', 'Part-time (PT)'], ['i', 'PT / 468PT (incl. 7% + 468PT $1,000)', s('pt')], ['s', 'PT subtotal', s('pt')],
+      ['g', 'Others'], ['i', 'Outsource', s('os')], ['i', 'OT', s('ot')], ['i', 'Transport allowance', s('tr')],
+      ['t', 'Total TM cost', total],
+    ];
+    const max = d3.max(items.filter((x) => x[0] !== 't' && x[0] !== 'g'), (x) => x[2]) || 1;
+    el.replaceChildren(...items.map(([kind, name, v]) => {
+      if (kind === 'g') { const h = document.createElement('div'); h.className = 'grp'; h.textContent = name; return h; }
+      const row = document.createElement('div'); row.className = 'row' + (kind === 's' ? ' sub' : kind === 't' ? ' total' : '');
       const a = document.createElement('span'); a.textContent = name;
-      const t = document.createElement('div'); const f = document.createElement('div'); f.className = 'fill'; f.style.width = (v / max * 100) + '%'; t.appendChild(f);
-      const n = document.createElement('span'); n.textContent = `${fmtN(v)} · ${d3.format('.0%')(total ? v / total : 0)}`;
+      const t = document.createElement('div');
+      if (kind !== 't') { const f = document.createElement('div'); f.className = 'fill'; f.style.width = (v / max * 100) + '%'; t.appendChild(f); }
+      const n = document.createElement('span'); n.textContent = `${fmtN(v)} · ${d3.format('.1%')(total ? v / total : 0)}`;
       row.append(a, t, n); return row;
-    }), totalRow);
+    }));
   }
 
   const amSel = $('am-filter'), search = $('search'), tmSearch = $('tm-search');
@@ -437,7 +477,8 @@
     $('scope-ex').setAttribute('aria-pressed', String(!!ex));
     $('scope-ex').disabled = !(DATA.dm_ex && DATA.dm_ex.length);
     const dm = ex ? DATA.dm_ex : DATA.dm, am = ex ? DATA.am_ex : DATA.am;
-    const shops = ex ? DATA.shops.filter((r) => !EXCLUDED.includes(r.shop_code)) : DATA.shops;
+    const scopeShops = ex ? DATA.shops.filter((r) => !EXCLUDED.includes(r.shop_code)) : DATA.shops;
+    const shops = scopeShops.filter((r) => passTier(r.shop_code));
     const sum = (k) => d3.sum(dm, (r) => r[k] || 0);
     const t = { pos_gmv: sum('pos_gmv'), pos_gpa: sum('pos_gpa'), pickup_gpa: sum('pickup_gpa'), tm_cost: sum('tm_cost'), dop: sum('dop'), proj_dop: sum('proj_dop') };
     t.gp_pct = t.pos_gmv ? t.pos_gpa / t.pos_gmv : null;
@@ -451,7 +492,7 @@
     // Data checks shown to the reader
     const d = DATA.dates || {};
     const salesDate = d.pos_gpa || DATA.as_of, costDates = [...new Set(['pickup_gpa', 'tm_cost', 'office_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex'].map((k) => d[k]).filter(Boolean))];
-    $('dop-dates').textContent = costDates.length ? `POS sales, disposal and marketing up to ${salesDate}; pickup GPA and other costs up to ${costDates.join(', ')}.` : `Month to date up to ${DATA.as_of}.`;
+    $('dop-dates').textContent = 'Source sheets update every day at 2pm; this dashboard refreshes at 2:30pm. ' + (costDates.length ? `POS sales, disposal and marketing up to ${salesDate}; pickup GPA and other costs up to ${costDates.join(', ')}.` : `Month to date up to ${DATA.as_of}.`);
     const checks = [];
     if (costDates.some((c) => c !== salesDate)) checks.push(`Dates don't match in the source: POS sales are up to ${salesDate} but most costs are up to ${costDates.join(', ')}. DOP and projected DOP include an extra day of costs without that day's sales, so they look worse than they are until the sheet catches up.`);
     const high = shops.filter((r) => r.pos_gp_pct > GP_FLAG);
@@ -465,8 +506,8 @@
 
     $('mode-total').setAttribute('aria-pressed', String(mode === 'total'));
     $('mode-avg').setAttribute('aria-pressed', String(mode === 'avg'));
-    drawTeam($('dm-table'), dm, 'dm', 'DM', shops, ex);
-    drawTeam($('am-table'), am, 'am', 'AM', shops, ex);
+    drawTeam($('dm-table'), dm, 'dm', 'DM', scopeShops, ex);
+    drawTeam($('am-table'), am, 'am', 'AM', scopeShops, ex);
 
     // Shop count by DM > AM with subtotals
     const cnt = []; const byDm = d3.group(shops, (r) => r.dm);
@@ -490,27 +531,21 @@
     ['pos_gpa', 'pickup_gpa', 'tm_cost', 'disposal_cost', 'other_mkt_cost', 'dop', 'proj_dop'].forEach((c) => { avgRow[c] = rows.length ? d3.mean(rows, (r) => r[c] || 0) : null; });
     avgRow.pos_gp_pct = null;
     drawTable($('shop-table'), rows.length ? rows.concat([avgRow]) : rows, [
-      { key: 'shop_code', label: 'Shop', freeze: true }, { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' },
+      { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' },
       { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'pos_gp_pct', label: 'GP%', fmt: fmtP, flag: (r) => r.pos_gp_pct > GP_FLAG }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN },
       { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'disposal_cost', label: 'Disposal', fmt: fmtN }, { key: 'other_mkt_cost', label: 'Other & MKT', fmt: fmtN },
       { key: 'tm_to_gp', label: 'TM / GP', fmt: fmtP, get: ratio },
       { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true, bar: { max } },
+      { key: 'vs_avg', label: 'Proj. DOP vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
     ]);
-    $('shop-count').textContent = `${rows.length} shops shown. Click a column to sort. TM / GP = frontline TM cost ÷ (POS GPA + pickup GPA). Excl. Outlet & EPR hides SWH, CHE and EPR.`;
-    drawRank($('rank'), rows);
+    $('shop-count').textContent = `${rows.length} shops shown. Click a column to sort. TM / GP = frontline TM cost ÷ (POS GPA + pickup GPA). The average per shop is the baseline: "vs avg" shows how far each shop is above or below it. Excl. Outlet & EPR hides SWH, CHE and EPR.`;
+    drawRank($('rank'), rows, avgRow.proj_dop);
 
-    const P = DATA.pos;
-    $('dop-target').hidden = !P;
-    if (P) {
-      const tRows = P.shops.filter((r) => (!ex || !EXCLUDED.includes(r.shop_code)) && (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
-      $('dop-target-note').textContent = `From Tableau, ${P.period}. Uses the same AM filter and search as above. Green = projected at or above target, red = below 80%.`;
-      drawTable($('dop-target-table'), tRows, posCols(tRows, false));
-    }
   }
 
   function posCols(rows, detail) {
     const max = d3.max(rows, (r) => r.proj_ach || 0) || 0;
-    const c = [{ key: 'shop_code', label: 'Shop', freeze: true }, { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'target', label: 'Target', fmt: fmtN }];
+    const c = [{ key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'target', label: 'Target', fmt: fmtN }];
     if (detail) c.push({ key: 'takeaway_gmv', label: 'Takeaway', fmt: fmtN }, { key: 'delivery_gmv', label: 'Delivery webcart', fmt: fmtN }, { key: 'liteapp_gmv', label: 'Lite app webcart', fmt: fmtN });
     c.push({ key: 'pos_gmv', label: 'Total POS GMV', fmt: fmtN }, { key: 'current_ach', label: 'Current ach.', fmt: fmtP },
       { key: 'proj_gmv', label: 'Projected GMV', fmt: fmtN }, { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls, bar: { max, tone: true } });
@@ -537,8 +572,14 @@
     const P = DATA.pos;
     $('pos-missing').hidden = !!P; $('pos-body').hidden = !P;
     if (!P) return;
-    const t = P.total || {};
-    $('pos-note').textContent = `From Tableau (O2O Report › Shop Monthly Target), ${P.period}. Exported ${P.exported_at}.`;
+    // With a tier picked, the headline figures are rebuilt from that tier's shops
+    let t = P.total || {};
+    if ($('tier-filter').value) {
+      const ts = P.shops.filter((r) => passTier(r.shop_code)); const sm = (k) => d3.sum(ts, (r) => r[k] || 0);
+      const tg = sm('target'); t = { target: tg, pos_gmv: sm('pos_gmv'), proj_gmv: sm('proj_gmv') };
+      t.current_ach = tg ? t.pos_gmv / tg : null; t.proj_ach = tg ? t.proj_gmv / tg : null;
+    }
+    $('pos-note').textContent = `From Tableau (O2O Report › Shop Monthly Target), ${P.period}. Tableau last update ${P.tableau_updated || P.exported_at}; refreshed daily at 10:07.`;
     tiles($('pos-kpis'), [
       ['POS GMV target', fmtK(t.target), { hint: 'Month' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: 'Month to date' }],
       ['Current achievement', fmtP(t.current_ach)], ['Projected POS GMV', fmtK(t.proj_gmv)],
@@ -550,13 +591,30 @@
     const picked = posAm.value; const ams = [...new Set(P.shops.map((r) => r.am))].sort();
     if (posAm.options.length !== ams.length + 1) { posAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); posAm.value = picked; }
     const q = posSearch.value.trim().toLowerCase();
-    const rows = P.shops.filter((r) => (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
+    const rows = P.shops.filter((r) => passTier(r.shop_code) && (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
     drawTable($('pos-table'), rows, posCols(rows, true));
     drawAch($('pos-chart'), rows);
   }
 
+  function drawDaily(el, days) {
+    el.replaceChildren();
+    if (!days.length || !el.clientWidth) return;
+    const W = el.clientWidth, H = 200, m = { t: 12, r: 8, b: 24, l: 48 };
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('font-size', 10.5).style('font-family', 'var(--sans)');
+    const x = d3.scaleBand(days.map((d) => d.date), [m.l, W - m.r]).padding(0.25);
+    const y = d3.scaleLinear([0, d3.max(days, (d) => Math.max(d.total || 0, d.budget_total || 0)) || 1], [H - m.b, m.t]).nice();
+    svg.append('g').selectAll('line').data(y.ticks(4)).join('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y).attr('y2', y).style('stroke', 'var(--grid)');
+    svg.append('g').selectAll('text').data(y.ticks(4)).join('text').attr('x', m.l - 6).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').style('fill', 'var(--muted)').text(fmtK);
+    const step = Math.ceil(days.length / Math.max(1, Math.floor((W - m.l) / 42)));
+    svg.append('g').selectAll('text').data(days.filter((d, i) => i % step === 0)).join('text').attr('x', (d) => x(d.date) + x.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text((d) => d.date);
+    svg.append('g').selectAll('rect').data(days).join('rect').attr('x', (d) => x(d.date)).attr('width', x.bandwidth()).attr('y', (d) => y(d.total || 0)).attr('height', (d) => y(0) - y(d.total || 0)).attr('rx', 2)
+      .style('fill', (d) => d.budget_total != null && d.total > d.budget_total ? 'var(--bad)' : 'var(--accent)').append('title').text((d) => `${d.date}: ${fmtN(d.total)} (roster ${fmtN(d.budget_total)})`);
+    const line = d3.line().x((d) => x(d.date) + x.bandwidth() / 2).y((d) => y(d.budget_total || 0));
+    svg.append('path').datum(days.filter((d) => d.budget_total != null)).attr('d', line).style('fill', 'none').style('stroke', 'var(--warn)').attr('stroke-width', 2).attr('stroke-dasharray', '4 3');
+  }
+
   function drawTm() {
-    const tm = DATA.tm || [];
+    const tm = (DATA.tm || []).filter((r) => passTier(r.shop));
     const cur = d3.sum(tm, (r) => r.total_cost || 0), proj = d3.sum(tm, (r) => r.roster_total_cost || 0), bud = DATA.tm_budget;
     const list = [
       ['Current TM cost', fmtK(cur), { hint: 'So far this month' }],
@@ -569,20 +627,63 @@
     }
     list.push(['Shops', fmtN(tm.length)]);
     tiles($('tm-kpis'), list);
+
+    // Daily PT + outsource cost with change vs the day before
+    const days = (DATA.tm_daily || []).map((d, i, a) => {
+      const prev = i ? a[i - 1].total : null;
+      return { ...d, pt_all: (d.pt_cost || 0) + (d.pt_levy || 0), vs_prev: prev == null ? null : d.total - prev, vs_prev_pct: prev ? (d.total - prev) / prev : null, vs_budget: d.budget_total == null ? null : d.total - d.budget_total };
+    });
+    $('tm-daily-card').hidden = !days.length;
+    drawDaily($('tm-daily-chart'), days);
+    const wd = (s) => { const [dd, mm] = s.split('/').map(Number); const y = Number((DATA.month || '').slice(-4)) || new Date().getFullYear(); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(y, mm - 1, dd).getDay()]; };
+    const sign = (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v);
+    const mtd = { date: 'Month to date', _pin: true, _cls: 'tot', pt_hours: d3.sum(days, (d) => d.pt_hours || 0), pt_all: d3.sum(days, (d) => d.pt_all), os_hours: d3.sum(days, (d) => d.os_hours || 0), os_cost: d3.sum(days, (d) => d.os_cost || 0), total: d3.sum(days, (d) => d.total || 0), budget_total: d3.sum(days, (d) => d.budget_total || 0) };
+    mtd.vs_budget = mtd.total - mtd.budget_total;
+    drawTable($('tm-daily-table'), days.slice().reverse().concat(days.length ? [mtd] : []), [
+      { key: 'date', label: 'Date', freeze: true }, { key: 'day', label: 'Day', cls: 'l', get: (r) => r._pin ? '' : wd(r.date) },
+      { key: 'pt_hours', label: 'PT hrs', fmt: fmtH }, { key: 'pt_all', label: 'PT cost (incl. 7%)', fmt: fmtN },
+      { key: 'os_hours', label: 'OS hrs', fmt: fmtH }, { key: 'os_cost', label: 'OS cost', fmt: fmtN },
+      { key: 'total', label: 'Daily TM cost', fmt: fmtN },
+      { key: 'vs_prev', label: 'vs yesterday', fmt: sign, tone: (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos') },
+      { key: 'vs_prev_pct', label: 'vs yesterday %', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + d3.format('.1%')(v), tone: (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos') },
+      { key: 'budget_total', label: 'Roster budget', fmt: fmtN },
+      { key: 'vs_budget', label: 'vs roster', fmt: sign, tone: (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos') },
+    ]);
     drawMix($('mix'), tm);
     const q = tmSearch.value.trim().toLowerCase();
     const rows = tm.filter((r) => !q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q));
     drawTable($('tm-table'), rows, [
-      { key: 'shop', label: 'Shop', freeze: true }, { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+      { key: 'shop', label: 'Shop', freeze: true }, tierCol('shop'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
       { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASS', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
       { key: 'pt_hours', label: 'PT hrs', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs', fmt: fmtH },
-      { key: 'ss_sa_with_oh', label: 'SS+ASS+SA (basic + 15% OH)', fmt: fmtN }, { key: 'pt_cost', label: 'PT cost', fmt: fmtN }, { key: 'os_cost', label: 'OS cost', fmt: fmtN },
+      { key: 'c_mgmt', label: 'DM+AM+UM cost', fmt: fmtN, get: (r) => grp(r).mgmt },
+      { key: 'c_ss', label: 'SS+ASS cost', fmt: fmtN, get: (r) => grp(r).ss },
+      { key: 'c_sa', label: 'SA cost', fmt: fmtN, get: (r) => grp(r).sa },
+      { key: 'c_pt', label: 'PT cost', fmt: fmtN, get: (r) => grp(r).pt },
+      { key: 'c_os', label: 'OS cost', fmt: fmtN, get: (r) => grp(r).os },
       { key: 'roster_total_cost', label: 'Projected TM cost', fmt: fmtN, bar: { max: d3.max(rows, (r) => r.roster_total_cost || 0) } },
+    ]);
+    const share = (k) => (r) => { const g = grp(r); return g.total ? g[k] / g.total : null; };
+    const allG = rows.map(grp); const sum = (k) => d3.sum(allG, (g) => g[k]);
+    const allRow = { shop: 'All', shop_name: 'All shops shown', _pin: true, _cls: 'tot', mgmt_overhead: sum('mgmt'), ss_cost: sum('ss'), assp_cost: 0, sa_cost: sum('sa'), ss_sa_with_oh: sum('ss') + sum('sa'), pt_cost: sum('pt'), pt_levy: 0, os_cost: sum('os'), ot_cost: sum('ot'), transport: sum('tr') };
+    drawTable($('dist-table'), rows.concat([allRow]), [
+      { key: 'shop', label: 'Shop', freeze: true }, tierCol('shop'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+      { key: 'd_mgmt', label: 'DM+AM+UM %', fmt: fmtP, get: share('mgmt') },
+      { key: 'd_ss', label: 'SS+ASS %', fmt: fmtP, get: share('ss') },
+      { key: 'd_sa', label: 'SA %', fmt: fmtP, get: share('sa') },
+      { key: 'd_other', label: 'PT, OS & others %', fmt: fmtP, get: share('other') },
+      { key: 'd_total', label: 'Current TM cost', fmt: fmtN, get: (r) => grp(r).total },
     ]);
   }
 
+  const tierSel = document.getElementById('tier-filter');
+  tierSel.addEventListener('change', () => draw());
   function draw() {
     if (!DATA) return;
+    const tiers = [...new Set(Object.values(DATA.tiers || {}))].sort();
+    if (tierSel.options.length !== tiers.length + 2) { const v = tierSel.value; tierSel.replaceChildren(new Option('All tiers', ''), ...tiers.map((x) => new Option(x, x)), new Option('No tier', 'No tier')); tierSel.value = v; }
+    document.getElementById('tier-bar').hidden = !tiers.length;
+    document.getElementById('tier-note').hidden = !tierSel.value; document.getElementById('tier-note').textContent = tierSel.value ? 'Applies to shop tables, shop charts, shop counts, TM cost and POS figures. The DM / AM summary rows, DOP tiles and daily TM cost are all-shop totals from the sheets.' : '';
     $('updated').textContent = `${DATA.month} · data refreshed ${DATA.generated_at} from the DOP and TM cost Google Sheets.`;
     if (current === 'dop') drawDop();
     if (current === 'tm') drawTm();

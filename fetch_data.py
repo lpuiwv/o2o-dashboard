@@ -7,6 +7,7 @@ Optional:
   MOCK_VALUES     - path to a JSON file of {range: values} used instead of Google (for local testing)
 """
 import base64
+import re
 import datetime as dt
 import json
 import os
@@ -21,6 +22,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 DOP_SHEET = "1AiI-an7F-dtpZ_BoTnrQY65Kokha8c3csloRSrSueuQ"  # Daily Shop PNL (DOP bot)
 TM_SHEET = "1AnaHxF1yKUWAAVqy77PkYb4fWdVxcSdZ1bwdByHmNJk"   # All Shop Daily TM Cost
+TIER_SHEET = "1YFEdwrN9E8LQlB63hWZU6kWg_99wUjmxP_kUsKmZQvg"  # Tier of shop (by target): Code / Shop Name / Tier
 POS_SHEET = "1AZBZXU_dbRvTdUaE-J0WVcM62ZFkMTMOhsARdSNiyec"  # O2O POS Target (Tableau) - copy of Tableau crosstabs
 ITERATIONS = 250_000
 ROOT = Path(__file__).resolve().parent
@@ -98,9 +100,10 @@ def parse_tm(values):
     return rows
 
 
+# Layout written by the daily Tableau refresh: "Shop Monthly Target" view (NOT the DOP version)
 POS_SHOP_COLS = ["dm", "am", "shop_code", "shop_name", "target", "takeaway_gmv", "delivery_gmv", "liteapp_gmv",
                  "pos_gmv", "current_ach", "proj_gmv", "proj_ach"]
-POS_AM_COLS = ["am", "target", "target_share", "pos_gmv", "gmv_share", "proj_ach", "current_ach"]
+POS_AM_COLS = ["am", "target", "pos_gmv", "current_ach", "proj_ach"]
 
 
 def parse_pos(values, cols, text_cols, total_label="Grand Total"):
@@ -121,12 +124,67 @@ def fetch_pos(get):
     """POS GMV vs target, copied from Tableau into the POS sheet (optional)."""
     try:
         shops, total = parse_pos(get(POS_SHEET, "'POS by shop'!A1:L200"), POS_SHOP_COLS, {"dm", "am", "shop_code", "shop_name"})
-        am, am_total = parse_pos(get(POS_SHEET, "'AM achievement'!A1:G30"), POS_AM_COLS, {"am"})
+        am, am_total = parse_pos(get(POS_SHEET, "'AM achievement'!A1:E30"), POS_AM_COLS, {"am"})
         info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B10") if r}
-        return {"shops": shops, "total": total or am_total, "am": am, "period": info.get("Period", ""), "exported_at": info.get("Exported at", "")}
+        return {"shops": shops, "total": total or am_total, "am": am, "period": info.get("Period", ""), "exported_at": info.get("Exported at", ""), "tableau_updated": info.get("Tableau last update", "")}
     except Exception as e:
         print(f"POS target sheet not read: {e}", file=sys.stderr)
         return None
+
+
+def parse_dop_target(values):
+    """'Oct Target' tab: two blocks (AM, DM) of name / Target / Proj. DOP / Project Achievement / Difference."""
+    out = {"am": [], "dm": [], "note": ""}
+    block = None
+    for r in values:
+        if not r:
+            continue
+        r = list(r) + [""] * (8 - len(r))
+        first = str(r[0]).strip()
+        if "Target for AM" in first:
+            block = "am"; continue
+        if "Target for DM" in first:
+            block = "dm"; continue
+        if first == "Grand Total":
+            if block:
+                out[block + "_total"] = num(r[1])
+            block = None; continue
+        if len(r) > 3 and "actual" in str(r[3]) and not out["note"]:
+            out["note"] = str(r[3]).strip()
+        if block and first:
+            out[block].append({"name": first, "target": num(r[1]), "proj_dop": num(r[3]), "achievement": num(r[5]), "difference": num(r[7])})
+    return out
+
+
+def parse_tm_daily(values):
+    """'每日 PT 外判 YYYYMM' rows 2-4: day labels (d/m), per-day headers, TOTAL row. Single-day figures, not cumulative."""
+    if len(values) < 3:
+        return []
+    labels, heads, total = values[0], values[1], values[2]
+    want = {"PT 時數": "pt_hours", "PT 成本": "pt_cost", "PT 7% 加成": "pt_levy", "外判時數": "os_hours",
+            "外判成本": "os_cost", "總成本": "total", "預算總成本": "budget_total"}
+    starts = [i for i, v in enumerate(labels) if re.fullmatch(r"\d{1,2}/\d{1,2}", str(v).strip())]
+    days = []
+    for n, st in enumerate(starts):
+        end = starts[n + 1] if n + 1 < len(starts) else st + 13
+        row = {"date": str(labels[st]).strip()}
+        for i in range(st, min(end, len(heads))):
+            key = want.get(str(heads[i]).strip())
+            if key and key not in row:
+                row[key] = num(total[i]) if i < len(total) else None
+        if row.get("total") is not None:
+            days.append(row)
+    return days
+
+
+def fetch_tiers(get):
+    """Shop code -> tier label (optional)."""
+    try:
+        rows = get(TIER_SHEET, "Sheet1!A1:C300")
+        return {str(r[0]).strip(): str(r[2]).strip() for r in rows[1:] if len(r) > 2 and str(r[0]).strip() and str(r[2]).strip()}
+    except Exception as e:
+        print(f"Tier sheet not read: {e}", file=sys.stderr)
+        return {}
 
 
 # ---------- fetching ----------
@@ -139,6 +197,8 @@ def tabs_for(d):
         "am_ex": (DOP_SHEET, f"'Summary - {mon}'!A25:O32"),
         "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:L150"),
         "tm": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A2:AF200"),
+        "dop_target": (DOP_SHEET, f"'{d:%b} Target'!A1:H40"),
+        "tm_daily": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A2:ZZ4"),
         "_month": d.strftime("%B %Y"),
     }
 
@@ -169,7 +229,14 @@ def make_getter():
 
 def fetch_month(get, d):
     t = tabs_for(d)
-    out = {k: get(*v) for k, v in t.items() if not k.startswith("_")}
+    optional = ("dop_target", "tm_daily")
+    out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
+    for k in optional:
+        try:
+            out[k] = get(*t[k])
+        except Exception as e:
+            print(f"{k} not read: {e}", file=sys.stderr)
+            out[k] = []
     out["_month"] = t["_month"]
     out["_date"] = d
     return out
@@ -211,6 +278,9 @@ def fetch_all():
         "tm_budget": fetch_budget(get, raw["_date"]),
         "dm_ex": dm_ex, "am_ex": am_ex,
         "pos": fetch_pos(get),
+        "tiers": fetch_tiers(get),
+        "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
+        "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }

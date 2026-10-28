@@ -198,12 +198,13 @@
       <p class="note" id="pos-note"></p>
       <div class="tiles" id="pos-kpis"></div>
       <div class="grid">
-        <div class="card"><h3>AM target achievement</h3><p class="note">POS GMV vs monthly target. Projected achievement extends month-to-date GMV to the full month.</p><div class="scroll"><table id="pos-am-table"></table></div></div>
-        <div class="card"><h3>Projected achievement by shop</h3><p class="note">Sorted high to low. The dashed line is 100% of target.</p><div class="chart" id="pos-chart"></div></div>
+        <div class="card"><h3>DM target achievement</h3><p class="note">POS GMV vs monthly target, summed from each DM's shops that have a target (Σ GMV ÷ Σ target). Projected achievement extends month-to-date GMV to the full month.</p><div class="scroll"><table id="pos-dm-table"></table></div></div>
+        <div class="card"><h3>AM target achievement</h3><p class="note">POS GMV vs monthly target by AM, summed from the AM's shops that have a target. Shops without a target are left out, so an AM with one can differ slightly from Tableau.</p><div class="scroll"><table id="pos-am-table"></table></div></div>
+        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV includes MKT fund and RM discount. Shops with no target this month (e.g. KSE) are listed for reference but left out of every total.</p>
+          <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="Search shop code or name" aria-label="Search shops"></div>
+          <div class="scroll"><table id="pos-table"></table></div></div>
+        <div class="card"><h3>Projected achievement by shop</h3><p class="note">Sorted high to low, same filters as the table above. The dashed line is 100% of target.</p><div class="chart" id="pos-chart"></div></div>
       </div>
-      <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV includes MKT fund and RM discount. KSE has no target yet, so it counts in GMV totals but has no achievement.</p>
-        <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="Search shop code or name" aria-label="Search shops"></div>
-        <div class="scroll"><table id="pos-table"></table></div></div>
     </div>
   </section>
 
@@ -572,22 +573,37 @@
     const P = DATA.pos;
     $('pos-missing').hidden = !!P; $('pos-body').hidden = !P;
     if (!P) return;
-    // With a tier picked, the headline figures are rebuilt from that tier's shops
-    let t = P.total || {};
-    if ($('tier-filter').value) {
-      const ts = P.shops.filter((r) => passTier(r.shop_code)); const sm = (k) => d3.sum(ts, (r) => r[k] || 0);
-      const tg = sm('target'); t = { target: tg, pos_gmv: sm('pos_gmv'), proj_gmv: sm('proj_gmv') };
-      t.current_ach = tg ? t.pos_gmv / tg : null; t.proj_ach = tg ? t.proj_gmv / tg : null;
-    }
-    $('pos-note').textContent = `From Tableau (O2O Report › Shop Monthly Target), ${P.period}. Tableau last update ${P.tableau_updated || P.exported_at}; refreshed daily at 10:07.`;
+    // Headline figures are rebuilt from the shops that have a target this month (a shop with no target, e.g. a new
+    // shop like KSE, is left out of every POS total) and that match the tier filter
+    const hasTarget = (r) => r.target != null && r.target > 0;
+    const noTarget = P.shops.filter((r) => !hasTarget(r)).map((r) => r.shop_code);
+    const ts = P.shops.filter((r) => hasTarget(r) && passTier(r.shop_code)); const sm = (k) => d3.sum(ts, (r) => r[k] || 0);
+    const t = { target: sm('target'), pos_gmv: sm('pos_gmv'), proj_gmv: sm('proj_gmv') };
+    t.current_ach = t.target ? t.pos_gmv / t.target : null; t.proj_ach = t.target ? t.proj_gmv / t.target : null;
+    $('pos-note').textContent = `From Tableau (O2O Report › Shop Monthly Target), ${P.period}. Tableau last update ${P.tableau_updated || P.exported_at}; refreshed daily at 10:07.` + (noTarget.length ? ` ${noTarget.join(', ')} ${noTarget.length > 1 ? 'have' : 'has'} no target this month, so ${noTarget.length > 1 ? 'they are' : 'it is'} not counted in any POS total or achievement (Tableau's own totals include ${noTarget.length > 1 ? 'them' : 'it'}).` : '');
     tiles($('pos-kpis'), [
       ['POS GMV target', fmtK(t.target), { hint: 'Month' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: 'Month to date' }],
       ['Current achievement', fmtP(t.current_ach)], ['Projected POS GMV', fmtK(t.proj_gmv)],
       ['Projected achievement', fmtP(t.proj_ach), { good: t.proj_ach >= 1, bad: t.proj_ach < 0.8, hint: t.proj_ach >= 1 ? 'On track' : 'Below target' }],
     ]);
-    const amMax = d3.max(P.am, (r) => r.proj_ach || 0) || 0;
-    drawTable($('pos-am-table'), P.am, [{ key: 'am', label: 'AM', freeze: true }, { key: 'target', label: 'Target', fmt: fmtN }, { key: 'pos_gmv', label: 'Total POS GMV', fmt: fmtN },
-      { key: 'current_ach', label: 'Current ach.', fmt: fmtP }, { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls, bar: { max: amMax, tone: true } }]);
+    // DM and AM achievement from the shop rows (follows the tier filter); Σ GMV ÷ Σ target
+    const inTier = ts;
+    const group = (key) => {
+      const g = d3.rollups(inTier, (v) => ({ shops: v.length, target: d3.sum(v, (r) => r.target || 0), pos_gmv: d3.sum(v, (r) => r.pos_gmv || 0), proj_gmv: d3.sum(v, (r) => r.proj_gmv || 0) }), (r) => r[key])
+        .map(([name, o]) => ({ [key]: name, ...o })).sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+      const tot = { [key]: 'Total', _pin: true, _cls: 'tot', shops: inTier.length, target: d3.sum(g, (r) => r.target), pos_gmv: d3.sum(g, (r) => r.pos_gmv), proj_gmv: d3.sum(g, (r) => r.proj_gmv) };
+      return g.concat(g.length ? [tot] : []).map((r) => ({ ...r, current_ach: r.target ? r.pos_gmv / r.target : null, proj_ach: r.target ? r.proj_gmv / r.target : null, gap: r.target ? r.proj_gmv - r.target : null }));
+    };
+    const groupCols = (key, label, rows) => {
+      const max = d3.max(rows.filter((r) => !r._pin), (r) => r.proj_ach || 0) || 0;
+      return [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'target', label: 'Target', fmt: fmtN }, { key: 'pos_gmv', label: 'Total POS GMV', fmt: fmtN },
+        { key: 'current_ach', label: 'Current ach.', fmt: fmtP }, { key: 'proj_gmv', label: 'Projected GMV', fmt: fmtN },
+        { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls, bar: { max, tone: true } },
+        { key: 'gap', label: 'Projected vs target', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true }];
+    };
+    const dmRows = group('dm'), amRows = group('am');
+    drawTable($('pos-dm-table'), dmRows, groupCols('dm', 'DM', dmRows));
+    drawTable($('pos-am-table'), amRows, groupCols('am', 'AM', amRows));
     const picked = posAm.value; const ams = [...new Set(P.shops.map((r) => r.am))].sort();
     if (posAm.options.length !== ams.length + 1) { posAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); posAm.value = picked; }
     const q = posSearch.value.trim().toLowerCase();

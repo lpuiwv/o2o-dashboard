@@ -215,6 +215,18 @@ def parse_commission(values):
     return out
 
 
+def cell_text(values):
+    return str(values[0][0]) if values and values[0] else ""
+
+
+def tm_stamps(raw):
+    """Update stamps written in the TM cost sheet's own headers."""
+    head, daily = cell_text(raw.get("tm_head")), cell_text(raw.get("tm_daily_head"))
+    v = re.search(r"版本[：:]\s*(\d{4}-\d{2}-\d{2})", head)
+    g = re.search(r"產生[：:]\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2})", daily)
+    return {"tm_version": v.group(1) if v else "", "tm_daily_generated": g.group(1) if g else ""}
+
+
 def fetch_tiers(get):
     """Shop code -> tier label (optional)."""
     try:
@@ -237,6 +249,8 @@ def tabs_for(d):
         "tm": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A2:AF200"),
         "dop_target": (DOP_SHEET, f"'{d:%b} Target'!A1:H40"),
         "commission": (DOP_SHEET, f"'{d:%b} Target %'!A1:K20"),
+        "tm_head": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A1"),
+        "tm_daily_head": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A1"),
         "tm_daily": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A2:ZZ4"),
         "raw": (DOP_SHEET, f"'Raw - {mon}'!A2:K4000"),
         "_month": d.strftime("%B %Y"),
@@ -269,7 +283,7 @@ def make_getter():
 
 def fetch_month(get, d):
     t = tabs_for(d)
-    optional = ("dop_target", "tm_daily", "raw", "commission")
+    optional = ("dop_target", "tm_daily", "raw", "commission", "tm_head", "tm_daily_head")
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
     for k in optional:
         try:
@@ -323,6 +337,7 @@ def fetch_all():
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "commission": parse_commission(raw.get("commission") or []),
+        "stamps": tm_stamps(raw),
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }

@@ -152,7 +152,11 @@ def parse_dop_target(values):
         if len(r) > 3 and "actual" in str(r[3]) and not out["note"]:
             out["note"] = str(r[3]).strip()
         if block and first:
-            out[block].append({"name": first, "target": num(r[1]), "proj_dop": num(r[3]), "achievement": num(r[5]), "difference": num(r[7])})
+            target, proj = num(r[1]), num(r[3])
+            diff = num(r[7])
+            if diff is None and target is not None and proj is not None:
+                diff = proj - target  # the sheet dropped its Difference column; work it out
+            out[block].append({"name": first, "target": target, "proj_dop": proj, "achievement": num(r[5]), "difference": diff})
     return out
 
 
@@ -191,6 +195,26 @@ def parse_tm_by_day(values):
     return dict(sorted(out.items()))
 
 
+def parse_commission(values):
+    """'<Mon> Target %' tab: row 1 = first names (Dick, Jeri, ...), then one row per commission level
+    (DOP threshold per person, last column = commission %, e.g. 120% ... 50%). Rows with '<' / '>' (the 0% line) are skipped."""
+    if len(values) < 3:
+        return {}
+    names = [str(x).strip() for x in values[0] if str(x).strip()]
+    levels = []
+    for r in values[2:]:
+        if not r or len(r) <= len(names):
+            continue
+        pct = num(r[len(names)])
+        if pct is None or pct <= 0 or any(("<" in str(c) or ">" in str(c)) for c in r[:len(names)]):
+            continue
+        levels.append({"pct": pct, "dop": [num(c) for c in r[:len(names)]]})
+    out = {}
+    for i, n in enumerate(names):
+        out[n] = sorted(({"pct": l["pct"], "dop": l["dop"][i]} for l in levels if i < len(l["dop"]) and l["dop"][i] is not None), key=lambda x: -x["pct"])
+    return out
+
+
 def fetch_tiers(get):
     """Shop code -> tier label (optional)."""
     try:
@@ -212,6 +236,7 @@ def tabs_for(d):
         "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:L150"),
         "tm": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A2:AF200"),
         "dop_target": (DOP_SHEET, f"'{d:%b} Target'!A1:H40"),
+        "commission": (DOP_SHEET, f"'{d:%b} Target %'!A1:K20"),
         "tm_daily": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A2:ZZ4"),
         "raw": (DOP_SHEET, f"'Raw - {mon}'!A2:K4000"),
         "_month": d.strftime("%B %Y"),
@@ -244,7 +269,7 @@ def make_getter():
 
 def fetch_month(get, d):
     t = tabs_for(d)
-    optional = ("dop_target", "tm_daily", "raw")
+    optional = ("dop_target", "tm_daily", "raw", "commission")
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
     for k in optional:
         try:
@@ -297,6 +322,7 @@ def fetch_all():
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
+        "commission": parse_commission(raw.get("commission") or []),
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }

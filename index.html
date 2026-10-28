@@ -143,7 +143,7 @@
         </div>
       </div>
       <div class="stack">
-        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs. DOP target, its projected DOP, achievement and difference come from the source sheet's monthly Target tab (targets exclude outlets; that tab projects with its own day count).</p><div class="scroll"><table id="dm-table"></table></div></div>
+        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − frontline TM, office, disposal, rental, operating, WH &amp; logistics, capex and marketing costs. 100% commission target and the commission levels come from the "<Mon> Target %" tab; Commission now = the highest level the Target tab's projected DOP reaches (0% below the 50% level). Projected DOP, achievement and difference come from the Target tab (excludes outlets; it projects with its own day count).</p><div class="scroll"><table id="dm-table"></table></div></div>
         <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × days in month ÷ days of POS sales, as in the source sheet. DOP ach. % follows the Target tab: projected DOP ÷ target, or target ÷ projected DOP when the target is negative.</p><div class="scroll"><table id="am-table"></table></div></div>
         <div class="card"><h3>Shop count by DM and AM</h3><p class="note">Shops in the current scope, and how many are projected to end the month with positive DOP.</p><div class="scroll"><table id="count-table"></table></div></div>
       </div>
@@ -343,7 +343,8 @@
     const max = d3.max(rows, (r) => Math.abs(r.proj_dop || 0)) || 0;
     const T = (r) => (tgt && tgt.get(r[k])) || {};
     const extra = tgt ? [
-      { key: 't_target', label: 'DOP target', fmt: fmtN, sign: true, get: (r) => T(r).target ?? null },
+      { key: 't_target', label: '100% commission target', fmt: fmtN, sign: true, get: (r) => r._pin ? (T(r).target ?? null) : (mode === 'avg' ? (T(r).target ?? null) : (commissionTarget(r[k]) ?? T(r).target ?? null)) },
+      { key: 't_comm', label: 'Commission now', fmt: (v) => v == null ? '' : d3.format('.0%')(v), tone: (v) => v == null ? '' : (v >= 1 ? 'pos' : (v === 0 ? 'neg' : '')), get: (r) => r._pin ? null : commissionNow(r[k], T(r).proj_full ?? r._proj_full) },
       { key: 't_proj', label: 'Proj. DOP (target sheet)', fmt: fmtN, sign: true, get: (r) => T(r).proj_dop ?? null },
       { key: 't_ach', label: 'DOP ach. %', fmt: fmtP, tone: achCls, get: (r) => T(r).achievement ?? null },
       { key: 't_diff', label: 'Diff. to target', fmt: fmtN, sign: true, get: (r) => T(r).difference ?? null },
@@ -363,7 +364,7 @@
       const o = { target: DATA.dop_target[k + '_total'] ?? d3.sum([...tgt.values()], (v) => v.target || 0), proj_dop: d3.sum([...tgt.values()], (v) => v.proj_dop || 0) };
       o.difference = o.proj_dop - o.target; o.achievement = dopAch(o.target, o.proj_dop); tgt.set(all[k], o);
     }
-    let list = rows.map((r) => ({ ...r, _n: n.get(r[k]) || 0 })).concat([all]);
+    let list = rows.map((r) => ({ ...r, _n: n.get(r[k]) || 0, _proj_full: r.proj_dop })).concat([all]);
     if (mode === 'avg') {
       list = list.map((r) => { const o = { ...r }; if (r._n) MONEY.forEach((c) => { o[c] = r[c] == null ? null : r[c] / r._n; }); return o; });
       if (tgt) tgt.forEach((v, key) => { const cnt = key === all[k] ? shops.length : (n.get(key) || 0); if (cnt) tgt.set(key, { ...v, target: v.target / cnt, proj_dop: v.proj_dop / cnt, difference: v.difference / cnt }); });
@@ -376,8 +377,13 @@
   // DOP targets by DM or AM from the source sheet's "<Mon> Target" tab (targets exclude outlets)
   function dopTargets(k) {
     const T = DATA.dop_target; if (!T || !(T[k] || []).length) return null;
-    return new Map(T[k].map((r) => [r.name, { ...r }]));
+    return new Map(T[k].map((r) => [r.name, { ...r, proj_full: r.proj_dop }]));
   }
+  // Commission levels from the "<Mon> Target %" tab, keyed by first name (Dick, Jeri, ...)
+  const levelsFor = (name) => { const c = DATA.commission || {}; return c[String(name || '').split(' ')[0]] || null; };
+  const commissionTarget = (name) => { const l = levelsFor(name); const hit = l && l.find((x) => Math.abs(x.pct - 1) < 1e-9); return hit ? hit.dop : null; };
+  // Highest level whose DOP threshold the projected DOP reaches; below the lowest level = 0%
+  const commissionNow = (name, proj) => { const l = levelsFor(name); if (!l || !l.length || proj == null) return null; const hit = l.find((x) => proj >= x.dop); return hit ? hit.pct : 0; };
   // Same rule as the target sheet: a negative target compares target ÷ projection, a positive one projection ÷ target
   const dopAch = (t, p) => (!t || !p) ? null : (t < 0 ? t / p : p / t);
 

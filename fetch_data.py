@@ -83,7 +83,36 @@ def parse_shops(values):
 TM_MAP = {"shop": 0, "shop_name": 1, "ss_n": 5, "ss_cost": 6, "assp_n": 7, "assp_cost": 8, "sa_n": 9,
           "sa_cost": 10, "pt_hours": 11, "pt_cost": 13, "ot_hours": 14, "ot_cost": 15, "os_hours": 16,
           "os_cost": 17, "transport": 18, "mgmt_overhead": 20, "ss_sa_with_oh": 21, "pt_levy": 27,
-          "total_cost": 28, "roster_total_cost": 31}
+          "total_cost": 28, "pt_cost_budget": 29, "pt_levy_budget": 30, "roster_total_cost": 31}
+
+# Which "TM Cost by Shop" tab to read per month (Vivian, 29/10/2026). Months not listed: try "<…> V1" first, then the classic tab.
+TM_TABS = {"202610": ("TM Cost by Shop 202610", "classic"), "202611": ("TM Cost by shop 202611 V1", "v1")}
+TM_RANGE = {"classic": "A2:AF200", "v1": "A4:AX200"}
+
+
+def tm_tab_candidates(d):
+    key = f"{d:%Y%m}"
+    if key in TM_TABS:
+        return [TM_TABS[key]]
+    return [(f"TM Cost by shop {key} V1", "v1"), (f"TM Cost by Shop {key}", "classic")]
+
+
+def _groups(mgmt, ss, sa, pt, os_, ot, tr, total=None):
+    g = {"mgmt": mgmt or 0, "ss": ss or 0, "sa": sa or 0, "pt": pt or 0, "os": os_ or 0, "ot": ot or 0, "tr": tr or 0}
+    g["total"] = total if total is not None else sum(g.values())
+    return g
+
+
+def _classic_groups(row):
+    """Classic tab: U = DM+AM+UM, V = SS+ASS+SA (with OH) split by basic cost; projection swaps PT for the roster PT (AD + AE)."""
+    ssb = (row["ss_cost"] or 0) + (row["assp_cost"] or 0)
+    sab = row["sa_cost"] or 0
+    v = row["ss_sa_with_oh"] or 0
+    ss = v * ssb / (ssb + sab) if ssb + sab else 0
+    sa = v * sab / (ssb + sab) if ssb + sab else 0
+    act = _groups(row["mgmt_overhead"], ss, sa, (row["pt_cost"] or 0) + (row["pt_levy"] or 0), row["os_cost"], row["ot_cost"], row["transport"])
+    proj = _groups(row["mgmt_overhead"], ss, sa, (row["pt_cost_budget"] or 0) + (row["pt_levy_budget"] or 0), row["os_cost"], row["ot_cost"], row["transport"])
+    return act, proj
 
 
 def parse_tm(values):
@@ -96,8 +125,46 @@ def parse_tm(values):
         if len(r) < 3 or not r[2]:
             continue
         r = r + [""] * (32 - len(r))
-        rows.append({k: (r[i] if k in ("shop", "shop_name") else num(r[i])) for k, i in TM_MAP.items()})
+        row = {k: (r[i] if k in ("shop", "shop_name") else num(r[i])) for k, i in TM_MAP.items()}
+        row["act"], row["proj"] = _classic_groups(row)
+        rows.append(row)
     return rows
+
+
+def parse_tm_v1(values):
+    """'TM Cost by shop YYYYMM V1': header row then shops; left block = actual to date (ends "實數小計"),
+    right block = full-month projection (ends "Projection 合計"). Columns found by header name."""
+    if not values:
+        return [], False
+    head = [str(h).split("\n")[0].strip() for h in values[0]]
+    cut = next(i for i, h in enumerate(head) if h.startswith("實數小計"))
+    end = next((i for i, h in enumerate(head) if h.startswith("Projection 合計")), len(head) - 1)
+
+    def find(prefixes, lo, hi):
+        return [i for i in range(lo, hi + 1) for p in prefixes if head[i].startswith(p)]
+
+    um_split = bool(find(["UM/SS/ASS 成本"], 0, cut))
+
+    def block(r, lo, hi):
+        v = lambda ps: sum(num(r[i]) or 0 for i in find(ps, lo, hi) if i < len(r))
+        return _groups(v(["AM+DM 成本", "DM+AM+UM 成本"]), v(["UM/SS/ASS 成本", "SS 成本", "AS 成本"]), v(["SA 成本"]),
+                       v(["PT 成本", "PT 7% 加成", "468PT $1,000"]), v(["外判成本"]), v(["OT 成本"]), v(["交通津貼"]),
+                       v(["實數小計", "Projection 合計"]))
+
+    rows = []
+    for r in values[1:]:
+        if not r or not str(r[0]).strip():
+            continue
+        code = str(r[0]).strip()
+        if code in ("合計", "Total", "TOTAL", "Grand Total"):
+            break
+        r = list(r) + [""] * (len(head) - len(r))
+        cnt = lambda ps: sum(num(r[i]) or 0 for i in find(ps, 0, cut))
+        act, proj = block(r, 0, cut), block(r, cut + 1, end)
+        rows.append({"shop": code, "shop_name": r[1], "ss_n": cnt(["SS/AS 人數", "SS 人數"]), "assp_n": cnt(["AS 人數"]),
+                     "sa_n": cnt(["SA 人數"]), "um_n": cnt(["UM 人數"]), "pt_hours": cnt(["PT 時數"]), "os_hours": cnt(["外判時數"]),
+                     "total_cost": act["total"], "roster_total_cost": proj["total"], "act": act, "proj": proj})
+    return rows, um_split
 
 
 # Layout written by the daily Tableau refresh: "Shop Monthly Target" view (NOT the DOP version)
@@ -237,7 +304,7 @@ def cell_text(values):
 def tm_stamps(raw):
     """Update stamps written in the TM cost sheet's own headers."""
     head, daily = cell_text(raw.get("tm_head")), cell_text(raw.get("tm_daily_head"))
-    v = re.search(r"版本[：:]\s*(\d{4}-\d{2}-\d{2})", head)
+    v = re.search(r"版本[：:]\s*(\d{4}-\d{2}-\d{2})", head) or re.search(r"截至\s*(\d{1,2}/\d{1,2})", head)
     g = re.search(r"產生[：:]\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2})", daily)
     return {"tm_version": v.group(1) if v else "", "tm_daily_generated": g.group(1) if g else ""}
 
@@ -261,10 +328,8 @@ def tabs_for(d):
         "dm_ex": (DOP_SHEET, f"'Summary - {mon}'!A18:O22"),
         "am_ex": (DOP_SHEET, f"'Summary - {mon}'!A25:O32"),
         "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:L150"),
-        "tm": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A2:AF200"),
         "dop_target": (DOP_SHEET, f"'{d:%b} Target'!A1:H40"),
         "commission": (DOP_SHEET, f"'{d:%b} Target %'!A1:K20"),
-        "tm_head": (TM_SHEET, f"'TM Cost by Shop {d:%Y%m}'!A1"),
         "tm_daily_head": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A1"),
         "tm_daily": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A2:ZZ4"),
         "raw": (DOP_SHEET, f"'Raw - {mon}'!A2:K4000"),
@@ -298,7 +363,7 @@ def make_getter():
 
 def fetch_month(get, d):
     t = tabs_for(d)
-    optional = ("dop_target", "tm_daily", "raw", "commission", "tm_head", "tm_daily_head")
+    optional = ("dop_target", "tm_daily", "raw", "commission", "tm_daily_head")
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
     for k in optional:
         try:
@@ -306,6 +371,20 @@ def fetch_month(get, d):
         except Exception as e:
             print(f"{k} not read: {e}", file=sys.stderr)
             out[k] = []
+    last = None
+    for tab, kind in tm_tab_candidates(d):
+        try:
+            out["tm"] = get(TM_SHEET, f"'{tab}'!{TM_RANGE[kind]}")
+            out["_tm_kind"], out["_tm_tab"] = kind, tab
+            break
+        except Exception as e:
+            last = e
+    else:
+        raise last
+    try:
+        out["tm_head"] = get(TM_SHEET, f"'{out['_tm_tab']}'!A1")
+    except Exception:
+        out["tm_head"] = []
     out["_month"] = t["_month"]
     out["_date"] = d
     return out
@@ -337,7 +416,10 @@ def fetch_all():
     dm_ex, _, _ = parse_team(raw["dm_ex"], "dm")
     am_ex, _, _ = parse_team(raw["am_ex"], "am")
     shops = parse_shops(raw["shops"])
-    tm = parse_tm(raw["tm"])
+    if raw["_tm_kind"] == "v1":
+        tm, um_split = parse_tm_v1(raw["tm"])
+    else:
+        tm, um_split = parse_tm(raw["tm"]), False
     if not dm or not shops:
         raise SystemExit("Sheet returned no rows - check the tab names and service-account access")
     return {
@@ -354,6 +436,7 @@ def fetch_all():
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
+        "tm_tab": raw["_tm_tab"], "tm_um_split": um_split,
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }

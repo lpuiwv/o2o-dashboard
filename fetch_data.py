@@ -83,7 +83,10 @@ def parse_shops(values):
 TM_MAP = {"shop": 0, "shop_name": 1, "ss_n": 5, "ss_cost": 6, "assp_n": 7, "assp_cost": 8, "sa_n": 9,
           "sa_cost": 10, "pt_hours": 11, "pt_cost": 13, "ot_hours": 14, "ot_cost": 15, "os_hours": 16,
           "os_cost": 17, "transport": 18, "mgmt_overhead": 20, "ss_sa_with_oh": 21, "pt_levy": 27,
-          "total_cost": 28, "pt_cost_budget": 29, "pt_levy_budget": 30, "roster_total_cost": 31}
+          "total_cost": 28, "pt_cost_budget": 29, "pt_levy_budget": 30, "roster_total_cost": 31, "pt_rate": 12}
+
+# From this month on, DM + AM cost is left out of TM cost (it sits in back-office cost) - Vivian, 29/10/2026
+DMAM_EXCLUDED_FROM = "202611"
 
 # Which "TM Cost by Shop" tab to read per month (Vivian, 29/10/2026: Oct = classic tab, Nov = V1). Months not listed: try "<…> V1" first, then the classic tab.
 TM_TABS = {"202610": ("TM Cost by Shop 202610", "classic"), "202611": ("TM Cost by shop 202611 V1", "v1")}
@@ -129,6 +132,10 @@ def parse_tm(values, ft_ratio=1.0):
         row = {k: (r[i] if k in ("shop", "shop_name") else num(r[i])) for k, i in TM_MAP.items()}
         row["act"], row["proj"] = _classic_groups(row, ft_ratio)
         row["total_cost"] = row["act"]["total"]
+        row["am"] = str(r[2]).strip()
+        rate = row["pt_rate"] or 0
+        row["proj_n"] = {"pt_hours": (row["pt_cost_budget"] or 0) / rate if rate else None, "os_hours": row["os_hours"],
+                         "ot_hours": row["ot_hours"], "ss_n": (row["ss_n"] or 0) + (row["assp_n"] or 0), "sa_n": row["sa_n"]}
         rows.append(row)
     return rows
 
@@ -161,11 +168,15 @@ def parse_tm_v1(values):
         if code in ("合計", "Total", "TOTAL", "Grand Total"):
             break
         r = list(r) + [""] * (len(head) - len(r))
-        cnt = lambda ps: sum(num(r[i]) or 0 for i in find(ps, 0, cut))
+        cnt = lambda ps, lo=0, hi=cut: sum(num(r[i]) or 0 for i in find(ps, lo, hi))
         act, proj = block(r, 0, cut), block(r, cut + 1, end)
+        proj_n = {"pt_hours": cnt(["PT 時數"], cut + 1, end), "os_hours": cnt(["外判時數"], cut + 1, end),
+                  "ot_hours": cnt(["OT 時數"], cut + 1, end), "ss_n": cnt(["SS/AS 人數", "SS 人數", "AS 人數"], cut + 1, end),
+                  "sa_n": cnt(["SA 人數"], cut + 1, end)}
         rows.append({"shop": code, "shop_name": r[1], "ss_n": cnt(["SS/AS 人數", "SS 人數"]), "assp_n": cnt(["AS 人數"]),
                      "sa_n": cnt(["SA 人數"]), "um_n": cnt(["UM 人數"]), "pt_hours": cnt(["PT 時數"]), "os_hours": cnt(["外判時數"]),
-                     "total_cost": act["total"], "roster_total_cost": proj["total"], "act": act, "proj": proj})
+                     "total_cost": act["total"], "roster_total_cost": proj["total"], "act": act, "proj": proj,
+                     "am": str(r[2]).strip(), "proj_n": proj_n})
     return rows, um_split
 
 
@@ -439,6 +450,13 @@ def fetch_all():
         tm, um_split = parse_tm(raw["tm"], ft_ratio), False
     if not dm or not shops:
         raise SystemExit("Sheet returned no rows - check the tab names and service-account access")
+    excl_dmam = f"{raw['_date']:%Y%m}" >= DMAM_EXCLUDED_FROM
+    if excl_dmam:
+        for r in tm:
+            for blk in ("act", "proj"):
+                r[blk]["total"] -= r[blk]["mgmt"]
+                r[blk]["mgmt"] = 0
+            r["total_cost"], r["roster_total_cost"] = r["act"]["total"], r["proj"]["total"]
     return {
         "month": raw["_month"],
         "as_of": as_of,
@@ -453,7 +471,8 @@ def fetch_all():
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
-        "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio,
+        "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio, "tm_excl_dmam": excl_dmam,
+        "_tm_month": f"{raw['_date']:%Y%m}",
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }
@@ -468,11 +487,52 @@ def encrypt(payload: dict, password: str) -> dict:
     return {"v": 1, "iter": ITERATIONS, "salt": b64(salt), "iv": b64(iv), "ct": b64(ct)}
 
 
+def decrypt(pkg: dict, password: str) -> dict:
+    b = lambda s: base64.b64decode(s)
+    key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=b(pkg["salt"]), iterations=pkg["iter"]).derive(password.encode())
+    return json.loads(AESGCM(key).decrypt(b(pkg["iv"]), b(pkg["ct"]), None))
+
+
+# Daily snapshot of the PROJECTED month TM cost per shop, kept (encrypted with the dashboard password) in
+# history/tm_proj.enc.json in the repo; the workflow commits it after each run. One snapshot per HKT day (last run wins).
+HISTORY = ROOT / "history" / "tm_proj.enc.json"
+HISTORY_DAYS = 70
+
+
+def snapshot(tm):
+    shops = {}
+    for r in tm:
+        p, n = r["proj"], r.get("proj_n") or {}
+        shops[r["shop"]] = {"t": round(p["total"], 2), "pt": round(p["pt"], 2), "os": round(p["os"], 2), "ot": round(p["ot"], 2),
+                            "tr": round(p["tr"], 2), "ft": round(p["mgmt"] + p["ss"] + p["sa"], 2),
+                            "pt_h": n.get("pt_hours"), "os_h": n.get("os_hours"), "ot_h": n.get("ot_hours"),
+                            "ss_n": n.get("ss_n"), "sa_n": n.get("sa_n")}
+    return {"total": round(sum(v["t"] for v in shops.values()), 2), "shops": shops}
+
+
+def update_history(data, password):
+    hist = {}
+    if HISTORY.exists():
+        try:
+            hist = decrypt(json.loads(HISTORY.read_text(encoding="utf-8")), password)
+        except Exception as e:  # password changed or file damaged -> start again
+            print(f"TM history not readable ({e}); starting a new one", file=sys.stderr)
+    month, today = data.pop("_tm_month"), dt.datetime.now(HKT).strftime("%Y-%m-%d")
+    hist.setdefault(month, {})[today] = snapshot(data["tm"])
+    keep = sorted({d for m in hist.values() for d in m})[-HISTORY_DAYS:]
+    hist = {m: {d: v for d, v in days.items() if d in keep} for m, days in hist.items()}
+    hist = {m: days for m, days in hist.items() if days}
+    HISTORY.parent.mkdir(exist_ok=True)
+    HISTORY.write_text(json.dumps(encrypt(hist, password)), encoding="utf-8")
+    data["tm_hist"] = dict(sorted(hist.get(month, {}).items()))
+
+
 def main():
     password = os.environ.get("DASH_PASSWORD", "")
     if len(password) < 10:
         raise SystemExit("DASH_PASSWORD secret missing or shorter than 10 characters")
     data = fetch_all()
+    update_history(data, password)
     site = ROOT / "site"
     site.mkdir(exist_ok=True)
     (site / "data.enc.json").write_text(json.dumps(encrypt(data, password)), encoding="utf-8")

@@ -85,8 +85,8 @@ TM_MAP = {"shop": 0, "shop_name": 1, "ss_n": 5, "ss_cost": 6, "assp_n": 7, "assp
           "os_cost": 17, "transport": 18, "mgmt_overhead": 20, "ss_sa_with_oh": 21, "pt_levy": 27,
           "total_cost": 28, "pt_cost_budget": 29, "pt_levy_budget": 30, "roster_total_cost": 31}
 
-# Which "TM Cost by Shop" tab to read per month (Vivian, 29/10/2026: use the V1 tabs — actual FT accrues daily). Months not listed: try "<…> V1" first, then the classic tab.
-TM_TABS = {"202610": ("TM Cost by shop 202610 V1", "v1"), "202611": ("TM Cost by shop 202611 V1", "v1")}
+# Which "TM Cost by Shop" tab to read per month (Vivian, 29/10/2026: Oct = classic tab, Nov = V1). Months not listed: try "<…> V1" first, then the classic tab.
+TM_TABS = {"202610": ("TM Cost by Shop 202610", "classic"), "202611": ("TM Cost by shop 202611 V1", "v1")}
 TM_RANGE = {"classic": "A2:AF200", "v1": "A4:AX200"}
 
 
@@ -103,19 +103,20 @@ def _groups(mgmt, ss, sa, pt, os_, ot, tr, total=None):
     return g
 
 
-def _classic_groups(row):
-    """Classic tab: U = DM+AM+UM, V = SS+ASS+SA (with OH) split by basic cost; projection swaps PT for the roster PT (AD + AE)."""
+def _classic_groups(row, ft_ratio=1.0):
+    """Classic tab: U = DM+AM+UM, V = SS+ASS+SA (with OH) split by basic cost; projection swaps PT for the roster PT (AD + AE).
+    The tab holds FULL-month FT pay, so actual FT = full month x ft_ratio (days so far / days in month); projection keeps the full month."""
     ssb = (row["ss_cost"] or 0) + (row["assp_cost"] or 0)
     sab = row["sa_cost"] or 0
     v = row["ss_sa_with_oh"] or 0
     ss = v * ssb / (ssb + sab) if ssb + sab else 0
     sa = v * sab / (ssb + sab) if ssb + sab else 0
-    act = _groups(row["mgmt_overhead"], ss, sa, (row["pt_cost"] or 0) + (row["pt_levy"] or 0), row["os_cost"], row["ot_cost"], row["transport"])
+    act = _groups((row["mgmt_overhead"] or 0) * ft_ratio, ss * ft_ratio, sa * ft_ratio, (row["pt_cost"] or 0) + (row["pt_levy"] or 0), row["os_cost"], row["ot_cost"], row["transport"])
     proj = _groups(row["mgmt_overhead"], ss, sa, (row["pt_cost_budget"] or 0) + (row["pt_levy_budget"] or 0), row["os_cost"], row["ot_cost"], row["transport"])
     return act, proj
 
 
-def parse_tm(values):
+def parse_tm(values, ft_ratio=1.0):
     rows = []
     for r in values[1:]:
         if not r or not str(r[0]).strip():
@@ -126,7 +127,8 @@ def parse_tm(values):
             continue
         r = r + [""] * (32 - len(r))
         row = {k: (r[i] if k in ("shop", "shop_name") else num(r[i])) for k, i in TM_MAP.items()}
-        row["act"], row["proj"] = _classic_groups(row)
+        row["act"], row["proj"] = _classic_groups(row, ft_ratio)
+        row["total_cost"] = row["act"]["total"]
         rows.append(row)
     return rows
 
@@ -309,6 +311,19 @@ def tm_stamps(raw):
     return {"tm_version": v.group(1) if v else "", "tm_daily_generated": g.group(1) if g else ""}
 
 
+def classic_ft_ratio(raw):
+    """Days so far / days in month for the classic tab's FT accrual: day of its "版本：YYYY-MM-DD" date (else today), capped at month end."""
+    import calendar
+    d = raw["_date"]
+    m = re.search(r"版本[：:]\s*(\d{4})-(\d{2})-(\d{2})", cell_text(raw.get("tm_head")))
+    if m and (int(m.group(1)), int(m.group(2))) == (d.year, d.month):
+        day = int(m.group(3))
+    else:
+        today = dt.datetime.now(HKT).date()
+        day = today.day if (today.year, today.month) == (d.year, d.month) else calendar.monthrange(d.year, d.month)[1]
+    return day / calendar.monthrange(d.year, d.month)[1]
+
+
 def fetch_tiers(get):
     """Shop code -> tier label (optional)."""
     try:
@@ -416,10 +431,12 @@ def fetch_all():
     dm_ex, _, _ = parse_team(raw["dm_ex"], "dm")
     am_ex, _, _ = parse_team(raw["am_ex"], "am")
     shops = parse_shops(raw["shops"])
+    ft_ratio = None
     if raw["_tm_kind"] == "v1":
         tm, um_split = parse_tm_v1(raw["tm"])
     else:
-        tm, um_split = parse_tm(raw["tm"]), False
+        ft_ratio = classic_ft_ratio(raw)
+        tm, um_split = parse_tm(raw["tm"], ft_ratio), False
     if not dm or not shops:
         raise SystemExit("Sheet returned no rows - check the tab names and service-account access")
     return {
@@ -436,7 +453,7 @@ def fetch_all():
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
-        "tm_tab": raw["_tm_tab"], "tm_um_split": um_split,
+        "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio,
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }

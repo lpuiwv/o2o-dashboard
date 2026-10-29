@@ -63,6 +63,9 @@
   td.flag { color: var(--warn); font-weight: 500; }
   .bar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
   .ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .dl-row { display: flex; justify-content: flex-end; margin: 4px 0 6px; }
+  .dl { font: inherit; font-size: 12px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card, transparent); color: var(--fg); cursor: pointer; }
+  .dl:hover { border-color: var(--accent); color: var(--accent); }
   select, input { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg button { font: inherit; font-size: 13px; border: 0; background: var(--panel); color: var(--muted); padding: 6px 12px; cursor: pointer; }
@@ -340,6 +343,35 @@
     });
     table.replaceChildren(thead, tbody);
     freezeCols(table, cols);
+    table._export = { rows: data, cols };
+    addDownload(table);
+  }
+
+  // "下載 CSV" button above every table: exports what the table shows now (filters and sort included).
+  // Numbers are written without thousands commas so Excel reads them as numbers; % columns keep the % sign.
+  function addDownload(table) {
+    const box = table.closest('.scroll'); if (!box || box.previousElementSibling?.classList.contains('dl-row')) return;
+    const row = document.createElement('div'); row.className = 'dl-row';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'dl'; b.textContent = '下載 CSV';
+    b.addEventListener('click', () => downloadCsv(table));
+    row.appendChild(b); box.before(row);
+  }
+  function downloadCsv(table) {
+    const { rows, cols } = table._export || {}; if (!rows) return;
+    const cell = (c, r) => {
+      const v = c.get ? c.get(r) : r[c.key];
+      if (v == null || v === '') return '';
+      if (typeof v === 'number') return c.fmt === fmtP ? fmtP(v).replace('\u2212', '-') : String(Math.round(v * 100) / 100);
+      return String(v);
+    };
+    const esc = (x) => /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x;
+    const lines = [cols.map((c) => esc(c.label)).join(','), ...rows.map((r) => cols.map((c) => esc(cell(c, r))).join(','))];
+    const title = (table.closest('.card')?.querySelector('h3')?.textContent || table.id).replace(/[\\/:*?"<>|]+/g, ' ').trim();
+    const tab = document.querySelector('.tabs button[aria-selected="true"]')?.textContent || '';
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `O2O ${tab} - ${title} (${(DATA.generated_at || '').slice(0, 10)}).csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
   // Stick the leading "freeze" columns to the left edge while the table scrolls sideways

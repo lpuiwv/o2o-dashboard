@@ -85,8 +85,8 @@ TM_MAP = {"shop": 0, "shop_name": 1, "ss_n": 5, "ss_cost": 6, "assp_n": 7, "assp
           "os_cost": 17, "transport": 18, "mgmt_overhead": 20, "ss_sa_with_oh": 21, "pt_levy": 27,
           "total_cost": 28, "pt_cost_budget": 29, "pt_levy_budget": 30, "roster_total_cost": 31}
 
-# Which "TM Cost by Shop" tab to read per month (Vivian, 29/10/2026). Months not listed: try "<…> V1" first, then the classic tab.
-TM_TABS = {"202610": ("TM Cost by Shop 202610", "classic"), "202611": ("TM Cost by shop 202611 V1", "v1")}
+# Which "TM Cost by Shop" tab to read per month (Vivian, 29/10/2026: use the V1 tabs — actual FT accrues daily). Months not listed: try "<…> V1" first, then the classic tab.
+TM_TABS = {"202610": ("TM Cost by shop 202610 V1", "v1"), "202611": ("TM Cost by shop 202611 V1", "v1")}
 TM_RANGE = {"classic": "A2:AF200", "v1": "A4:AX200"}
 
 

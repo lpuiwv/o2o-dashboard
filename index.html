@@ -71,6 +71,15 @@
   .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 10px; font-size: 12px; }
   .tip .k { color: var(--muted); }
   .mix { display: flex; flex-direction: column; gap: 6px; }
+  .pie { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; }
+  .pie svg { flex: 0 0 auto; max-width: 100%; }
+  .pie .lg { flex: 1 1 260px; display: grid; gap: 6px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .pie .lg .it { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; }
+  .pie .lg .it.pt { font-weight: 700; }
+  .pie .lg .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .pie .lg .tot { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 600; }
+  .sub-h { font-size: 13px; margin: 14px 0 6px; }
+  td.why { white-space: normal; min-width: 280px; max-width: 520px; line-height: 1.45; }
   .mix .row { display: grid; grid-template-columns: minmax(8rem, 12rem) 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .mix .fill { height: 10px; border-radius: 4px; background: var(--accent); }
   .mix .row.total { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 600; }
@@ -169,22 +178,24 @@
   <!-- TM cost -->
   <section class="pane" id="tm" role="tabpanel" aria-labelledby="tab-tm" hidden>
     <div class="stamp" id="stamp-tm"></div>
-    <div class="callout plain"><b>成本點計</b>每項成本 = basic + non-basic，再加：DM、AM、UM、SS、ASS、SA 加 15% overhead · PT 加 7%（468PT 每人另加 $1,000）· 偏遠店 SA–UM 有 $1,000 交通津貼。OT 每小時 $60，外判每小時 $65。</div>
+    <div class="callout plain"><b>成本點計</b>每項成本 = basic + non-basic，再加：DM、AM、UM、SS、ASS、SA 加 15% overhead · PT 加 7%（468PT 每人另加 $1,000）· 偏遠店 SA–UM 有 $1,000 交通津貼。OT 每小時 $60，外判每小時 $65。<b id="tm-dmam-note" class="tm-dmam" hidden></b></div>
     <div class="tiles" id="tm-kpis"></div>
     <div class="grid">
-      <div class="card"><h3>Where the TM cost goes — Actual</h3><p class="note">全部舖月初至今嘅實際 TM cost 按組別分，HK$。<span class="tm-src"></span></p><div class="mix" id="mix"></div></div>
-      <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。PT 用 roster 全月時數計；<span class="tm-proj-note"></span></p><div class="mix" id="mix-proj"></div></div>
+      <div class="card"><h3>Where the TM cost goes — Actual</h3><p class="note">全部舖月初至今嘅實際 TM cost 按組別分，HK$。圓心係 PT 佔幾多 %。<span class="tm-src"></span></p><div class="pie" id="mix"></div></div>
+      <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。PT 用 roster 全月時數計；<span class="tm-proj-note"></span></p><div class="pie" id="mix-proj"></div></div>
       <div class="card">
         <h3>TM cost by shop</h3>
         <p class="note">成本已包上面講嘅 overhead。Projected TM cost = 按 roster 計每間舖全月成本。</p>
-        <div class="ctrl"><input id="tm-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
+        <div class="ctrl"><select id="tm-am-filter" aria-label="Filter by AM"></select><input id="tm-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table"></table></div>
       </div>
       <div class="card" id="tm-daily-card">
-        <h3>Daily TM cost</h3>
-        <p class="note">每日整體前線 TM cost（FT、PT、外判同 overhead），由 DOP bot Sheet 每間舖每日嘅「TM Cost (Frontline)」加埋。「vs yesterday」同前一日比（增加係紅色）。「Of which PT + OS」係 TM cost Sheet 當日 PT（包 7%）同外判成本，只有全部舖嘅數。圖入面每條 bar 深色部分係 PT + OS。</p>
+        <h3>Projected monthly TM cost — daily tracking</h3>
+        <p class="note">每日記低一次全月預計 TM cost（每間舖），再同上一日比：增加係紅色，減少係綠色。「主要變動」講邊間舖、邊項變咗，例如 PT 減咗幾多小時。跟 Shop tier 篩選。</p>
         <div class="chart" id="tm-daily-chart"></div>
         <div class="scroll"><table id="tm-daily-table"></table></div>
+        <h4 class="sub-h" id="tm-diff-title"></h4>
+        <div class="scroll"><table id="tm-diff-table"></table></div>
       </div>
       <div class="card">
         <h3>Staff cost distribution by shop</h3>
@@ -505,28 +516,42 @@
   // Group labels: from Nov 2026 the source puts UM with SS/ASS instead of with DM/AM
   const lblMgmt = () => DATA.tm_um_split ? 'DM + AM' : 'DM + AM + UM';
   const lblSs = () => DATA.tm_um_split ? 'UM + SS + ASS' : 'SS + ASS';
-  function drawMix(el, tm, fn = grp) {
+  // Pie (donut) of cost groups; PT highlighted and its share written in the middle
+  const PIE_COLORS = { mgmt: '#9aa7b8', ss: '#7f9cc4', sa: '#b7c9e3', pt: null, os: '#d9a86c', ot: '#c79ac9', tr: '#a3b98a' };
+  function drawPie(el, tm, fn = grp) {
     const G = tm.map(fn); const s = (k) => d3.sum(G, (g) => g[k]);
     const total = s('total');
     const items = [
-      ['g', 'Full-time (FT)'], ['i', lblMgmt(), s('mgmt')], ['i', lblSs(), s('ss')], ['i', 'SA', s('sa')], ['s', 'FT subtotal', s('ft')],
-      ['g', 'Part-time (PT)'], ['i', 'PT / 468PT (incl. 7% + 468PT $1,000)', s('pt')], ['s', 'PT subtotal', s('pt')],
-      ['g', 'Others'], ['i', 'Outsource', s('os')], ['i', 'OT', s('ot')], ['i', 'Transport allowance', s('tr')],
-      ['t', 'Total TM cost', total],
-    ];
-    const max = d3.max(items.filter((x) => x[0] !== 't' && x[0] !== 'g'), (x) => x[2]) || 1;
-    el.replaceChildren(...items.map(([kind, name, v]) => {
-      if (kind === 'g') { const h = document.createElement('div'); h.className = 'grp'; h.textContent = name; return h; }
-      const row = document.createElement('div'); row.className = 'row' + (kind === 's' ? ' sub' : kind === 't' ? ' total' : '');
-      const a = document.createElement('span'); a.textContent = name;
-      const t = document.createElement('div');
-      if (kind !== 't') { const f = document.createElement('div'); f.className = 'fill'; f.style.width = (v / max * 100) + '%'; t.appendChild(f); }
-      const n = document.createElement('span'); n.textContent = `${fmtN(v)} · ${d3.format('.1%')(total ? v / total : 0)}`;
-      row.append(a, t, n); return row;
-    }));
+      ...(DATA.tm_excl_dmam ? [] : [['mgmt', lblMgmt()]]), ['ss', lblSs()], ['sa', 'SA'],
+      ['pt', 'PT / 468PT（包 7% + 468PT $1,000）'], ['os', 'Outsource 外判'], ['ot', 'OT'], ['tr', 'Transport 交通津貼'],
+    ].map(([k, name]) => ({ k, name, v: s(k), color: PIE_COLORS[k] || css('--accent') }));
+    el.replaceChildren();
+    if (!total) return;
+    const R = Math.min(130, Math.max(90, (el.clientWidth || 300) / 4)), r0 = R * 0.58, size = R * 2 + 8;
+    const svg = d3.select(el).append('svg').attr('width', size).attr('height', size).attr('viewBox', `${-size / 2} ${-size / 2} ${size} ${size}`).style('font-family', 'var(--sans)');
+    const arcs = d3.pie().sort(null).value((d) => d.v)(items.filter((d) => d.v > 0));
+    svg.selectAll('path').data(arcs).join('path').attr('d', (a) => d3.arc().innerRadius(r0).outerRadius(a.data.k === 'pt' ? R + 4 : R).padAngle(0.008)(a))
+      .style('fill', (a) => a.data.color).style('stroke', 'var(--bg)').style('stroke-width', 1)
+      .append('title').text((a) => `${a.data.name}: ${fmtN(a.data.v)}（${d3.format('.1%')(a.data.v / total)}）`);
+    const pt = items.find((d) => d.k === 'pt');
+    svg.append('text').attr('text-anchor', 'middle').attr('dy', '-0.1em').attr('font-size', R * 0.32).attr('font-weight', 700).style('fill', 'var(--fg)').text(d3.format('.1%')(pt.v / total));
+    svg.append('text').attr('text-anchor', 'middle').attr('dy', '1.5em').attr('font-size', 12).style('fill', 'var(--muted)').text('PT share');
+    const lg = document.createElement('div'); lg.className = 'lg';
+    items.forEach((d) => {
+      const it = document.createElement('div'); it.className = 'it' + (d.k === 'pt' ? ' pt' : '');
+      const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = d.color;
+      const a = document.createElement('span'); a.textContent = d.name;
+      const b = document.createElement('span'); b.textContent = fmtN(d.v);
+      const c = document.createElement('span'); c.textContent = d3.format('.1%')(d.v / total);
+      it.append(sw, a, b, c); lg.appendChild(it);
+    });
+    const t = document.createElement('div'); t.className = 'it tot';
+    t.append(document.createElement('span'), Object.assign(document.createElement('span'), { textContent: 'Total TM cost' + (DATA.tm_excl_dmam ? '（不含 DM、AM）' : '') }), Object.assign(document.createElement('span'), { textContent: fmtN(total) }), Object.assign(document.createElement('span'), { textContent: '100%' }));
+    lg.appendChild(t); el.appendChild(lg);
   }
 
-  const amSel = $('am-filter'), search = $('search'), tmSearch = $('tm-search');
+  const amSel = $('am-filter'), search = $('search'), tmSearch = $('tm-search'), tmAm = $('tm-am-filter');
+  tmAm.addEventListener('change', () => draw());
   amSel.addEventListener('change', () => draw());
   search.addEventListener('input', () => draw());
   tmSearch.addEventListener('input', () => draw());
@@ -749,20 +774,52 @@
     drawRate($('md-chart'), rows, T.md_rate);
   }
 
-  function drawDaily(el, days) {
+  // Line of the projected month TM cost, one point per day it was recorded
+  function drawProjLine(el, days) {
     el.replaceChildren();
-    if (!days.length || !el.clientWidth) return;
-    const W = el.clientWidth, H = 200, m = { t: 12, r: 8, b: 24, l: 48 };
+    if (days.length < 2 || !el.clientWidth) return;
+    const W = el.clientWidth, H = 190, m = { t: 14, r: 12, b: 24, l: 56 };
     const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('font-size', 10.5).style('font-family', 'var(--sans)');
-    const x = d3.scaleBand(days.map((d) => d.label), [m.l, W - m.r]).padding(0.25);
-    const y = d3.scaleLinear([0, d3.max(days, (d) => Math.max(d.total, d.ptos || 0)) || 1], [H - m.b, m.t]).nice();
+    const x = d3.scalePoint(days.map((d) => d.label), [m.l, W - m.r]).padding(0.3);
+    const ext = d3.extent(days, (d) => d.total), pad = Math.max(1, (ext[1] - ext[0]) * 0.15);
+    const y = d3.scaleLinear([ext[0] - pad, ext[1] + pad], [H - m.b, m.t]).nice();
     svg.append('g').selectAll('line').data(y.ticks(4)).join('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y).attr('y2', y).style('stroke', 'var(--grid)');
     svg.append('g').selectAll('text').data(y.ticks(4)).join('text').attr('x', m.l - 6).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').style('fill', 'var(--muted)').text(fmtK);
     const step = Math.ceil(days.length / Math.max(1, Math.floor((W - m.l) / 42)));
-    svg.append('g').selectAll('text').data(days.filter((d, i) => i % step === 0)).join('text').attr('x', (d) => x(d.label) + x.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text((d) => d.label);
-    svg.append('g').selectAll('rect').data(days).join('rect').attr('x', (d) => x(d.label)).attr('width', x.bandwidth()).attr('y', (d) => y(d.total)).attr('height', (d) => y(0) - y(d.total)).attr('rx', 2)
-      .style('fill', 'var(--accent)').style('opacity', 0.55).append('title').text((d) => `${d.label} ${d.day}: ${fmtN(d.total)}` + (d.ptos != null ? ` (PT + OS ${fmtN(d.ptos)})` : ''));
-    svg.append('g').selectAll('rect').data(days.filter((d) => d.ptos != null)).join('rect').attr('x', (d) => x(d.label)).attr('width', x.bandwidth()).attr('y', (d) => y(d.ptos)).attr('height', (d) => y(0) - y(d.ptos)).attr('rx', 2).style('fill', 'var(--accent)');
+    svg.append('g').selectAll('text').data(days.filter((d, i) => i % step === 0)).join('text').attr('x', (d) => x(d.label)).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text((d) => d.label);
+    svg.append('path').datum(days).attr('d', d3.line().x((d) => x(d.label)).y((d) => y(d.total))).style('fill', 'none').style('stroke', 'var(--accent)').style('stroke-width', 2);
+    svg.append('g').selectAll('circle').data(days).join('circle').attr('cx', (d) => x(d.label)).attr('cy', (d) => y(d.total)).attr('r', 3.5).style('fill', 'var(--accent)')
+      .append('title').text((d) => `${d.label}: ${fmtN(d.total)}` + (d.vs_prev != null ? `（${d.vs_prev > 0 ? '+' : ''}${fmtN(d.vs_prev)}）` : ''));
+  }
+
+  // Why a shop's projected cost moved between two snapshots, e.g. "PT −4 小時（−$240）"
+  const sgn = (v, f = fmtN) => (v > 0 ? '+' : v < 0 ? '−' : '') + f(Math.abs(v));
+  const sgn$ = (v) => sgn(v, (x) => '$' + fmtN(x));
+  function why(a, b) {
+    if (!a) return '新加入';
+    if (!b) return '已移除';
+    const out = [], d = (k) => (b[k] || 0) - (a[k] || 0);
+    const piece = (name, kc, kh) => {
+      const dc = d(kc), dh = kh && a[kh] != null && b[kh] != null ? d(kh) : null;
+      if (dh != null && Math.abs(dh) >= 0.01) out.push(`${name} ${sgn(dh, fmtH)} 小時（${sgn$(dc)}）`);
+      else if (Math.abs(dc) >= 1) out.push(`${name} ${sgn$(dc)}`);
+    };
+    piece('PT', 'pt', 'pt_h'); piece('外判', 'os', 'os_h'); piece('OT', 'ot', 'ot_h');
+    if (Math.abs(d('ft')) >= 1) {
+      const n = [];
+      if ((a.ss_n ?? null) !== (b.ss_n ?? null) && a.ss_n != null && b.ss_n != null) n.push(`SS/ASS ${fmtN(a.ss_n)}→${fmtN(b.ss_n)} 人`);
+      if ((a.sa_n ?? null) !== (b.sa_n ?? null) && a.sa_n != null && b.sa_n != null) n.push(`SA ${fmtN(a.sa_n)}→${fmtN(b.sa_n)} 人`);
+      out.push(`FT ${sgn$(d('ft'))}` + (n.length ? `（${n.join('，')}）` : ''));
+    }
+    if (Math.abs(d('tr')) >= 1) out.push(`交通津貼 ${sgn$(d('tr'))}`);
+    return out.join('；') || '其他';
+  }
+  function diffShops(prev, cur) {
+    const codes = new Set([...Object.keys(prev.shops || {}), ...Object.keys(cur.shops || {})]);
+    return [...codes].filter((c) => passTier(c)).map((c) => {
+      const a = (prev.shops || {})[c], b = (cur.shops || {})[c];
+      return { shop: c, before: a ? a.t : null, now: b ? b.t : null, delta: (b ? b.t : 0) - (a ? a.t : 0), reason: why(a, b) };
+    }).filter((x) => Math.abs(x.delta) >= 1).sort((p, q) => Math.abs(q.delta) - Math.abs(p.delta));
   }
 
   function drawTm() {
@@ -780,45 +837,54 @@
     list.push(['Shops', fmtN(tm.length)]);
     tiles($('tm-kpis'), list);
 
-    // Overall daily TM cost (DOP bot Raw, per shop per day), with change vs the day before
-    const tierOn = !!$('tier-filter').value;
-    const ptos = new Map((DATA.tm_daily || []).map((d) => [d.date, d.total]));
-    const wdName = (iso) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(iso + 'T00:00:00').getDay()];
-    const days = Object.entries(DATA.tm_by_day || {}).map(([iso, shopsDay]) => {
-      const total = d3.sum(Object.entries(shopsDay), ([code, v]) => passTier(code) ? v : 0);
-      const label = `${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`;
-      return { iso, label, day: wdName(iso), total, ptos: tierOn ? null : (ptos.get(label) ?? null) };
-    }).map((d, i, a) => {
-      const prev = i ? a[i - 1].total : null;
-      return { ...d, vs_prev: prev == null ? null : d.total - prev, vs_prev_pct: prev ? (d.total - prev) / prev : null, ptos_share: d.ptos != null && d.total ? d.ptos / d.total : null };
+    // Projected month TM cost, recorded once a day; compare each day with the one before and say what moved
+    const H = DATA.tm_hist || {};
+    const dates = Object.keys(H).sort();
+    const tot = (snap) => d3.sum(Object.entries(snap.shops || {}), ([c, v]) => passTier(c) ? v.t : 0);
+    const days = dates.map((iso, i) => {
+      const t = tot(H[iso]), prev = i ? tot(H[dates[i - 1]]) : null;
+      const ch = i ? diffShops(H[dates[i - 1]], H[iso]) : [];
+      return { iso, label: `${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`, total: t, vs_prev: prev == null ? null : t - prev, vs_pct: prev ? (t - prev) / prev : null,
+        main: i ? (ch.length ? ch.slice(0, 3).map((x) => `${x.shop}：${x.reason}`).join('；') + (ch.length > 3 ? `；另外 ${ch.length - 3} 間` : '') : '冇變') : '第一日記錄', _ch: ch };
     });
     $('tm-daily-card').hidden = !days.length;
-    drawDaily($('tm-daily-chart'), days);
-    const sign = (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v);
-    const red = (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos');
-    const mtd = { label: 'Month to date', _pin: true, _cls: 'tot', total: d3.sum(days, (d) => d.total), ptos: tierOn ? null : d3.sum(days, (d) => d.ptos || 0) };
-    mtd.ptos_share = mtd.ptos != null && mtd.total ? mtd.ptos / mtd.total : null;
-    const avg = { label: 'Daily average', _pin: true, _cls: 'tot', total: days.length ? mtd.total / days.length : null };
-    drawTable($('tm-daily-table'), days.slice().reverse().concat(days.length ? [avg, mtd] : []), [
-      { key: 'label', label: 'Date', freeze: true }, { key: 'day', label: 'Day', cls: 'l' },
-      { key: 'total', label: 'Daily TM cost', fmt: fmtN },
-      { key: 'vs_prev', label: 'vs yesterday', fmt: sign, tone: red },
-      { key: 'vs_prev_pct', label: 'vs yesterday %', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + d3.format('.1%')(v), tone: red },
-      { key: 'ptos', label: 'Of which PT + OS', fmt: fmtN },
-      { key: 'ptos_share', label: 'PT + OS share', fmt: fmtP },
+    drawProjLine($('tm-daily-chart'), days);
+    const red = (v) => v == null ? '' : (v > 0 ? 'neg' : v < 0 ? 'pos' : '');
+    drawTable($('tm-daily-table'), days.slice().reverse(), [
+      { key: 'label', label: 'Date', freeze: true },
+      { key: 'total', label: 'Projected TM cost', fmt: fmtN },
+      { key: 'vs_prev', label: 'vs yesterday', fmt: (v) => v == null ? '' : sgn(v), tone: red },
+      { key: 'vs_pct', label: 'vs yesterday %', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + d3.format('.2%')(v), tone: red },
+      { key: 'main', label: '主要變動', cls: 'l why' },
+    ]);
+    const last = days[days.length - 1];
+    $('tm-diff-title').textContent = !last ? '' : days.length < 2 ? '由今日開始每日記錄，聽日起先有同上一日嘅比較。' : `${last.label} 對比 ${days[days.length - 2].label}：每間舖嘅變動（${last._ch.length} 間）`;
+    drawTable($('tm-diff-table'), days.length < 2 ? [] : last._ch.map((x) => ({ ...x, shop_name: ((DATA.tm || []).find((r) => r.shop === x.shop) || {}).shop_name || '' })), [
+      { key: 'shop', label: 'Shop', freeze: true }, { key: 'shop_name', label: 'Name', cls: 'l' },
+      { key: 'before', label: '上一日 projected', fmt: fmtN }, { key: 'now', label: '今日 projected', fmt: fmtN },
+      { key: 'delta', label: 'Change', fmt: (v) => sgn(v), tone: red },
+      { key: 'reason', label: '原因', cls: 'l why' },
     ]);
     const ftR = DATA.tm_ft_ratio;
     document.querySelectorAll('.tm-src').forEach((el) => { el.textContent = `來源：${DATA.tm_tab || ''}。` + (ftR != null ? `FT（DM、AM、UM、SS、ASS、SA）按日累計：全月人工 × ${d3.format('.1%')(ftR)}（已過日數 ÷ 當月日數）。` : 'FT 按日累計（source 已計）。') + (DATA.tm_um_split ? 'UM 同 SS、ASS 一齊計。' : 'Source 將 DM、AM、UM 合埋計。'); });
     document.querySelectorAll('.tm-proj-note').forEach((el) => { el.textContent = DATA.tm_um_split || ftR == null ? '固定成本按全月計，外判用外判更表，交通津貼當合資格同事全部達標。' : 'FT 用全月人工；外判、OT、交通津貼同 source sheet 一樣（外判已係全月外判更表）。'; });
-    drawMix($('mix'), tm, grp);
-    drawMix($('mix-proj'), tm, grpP);
+    $('tm-dmam-note').hidden = !DATA.tm_excl_dmam; $('tm-dmam-note').textContent = DATA.tm_excl_dmam ? ' 由 11 月起，所有 TM cost 已剔除 DM、AM（已計入 back office cost）。' : '';
+    drawPie($('mix'), tm, grp);
+    drawPie($('mix-proj'), tm, grpP);
+    // AM per shop: POS / DOP sheets first (same names as other tabs), else the TM sheet's own AM column
+    const amOf = new Map(); tm.forEach((r) => amOf.set(r.shop, r.am || '—'));
+    (DATA.shops || []).forEach((r) => { if (amOf.has(r.shop_code)) amOf.set(r.shop_code, r.am); });
+    ((DATA.pos || {}).shops || []).forEach((r) => { if (amOf.has(r.shop_code)) amOf.set(r.shop_code, r.am); });
+    const tmAms = [...new Set(amOf.values())].sort(); const pickedAm = tmAm.value;
+    if (tmAm.options.length !== tmAms.length + 1) { tmAm.replaceChildren(new Option('All AMs', ''), ...tmAms.map((a) => new Option(a, a))); tmAm.value = pickedAm; }
     const q = tmSearch.value.trim().toLowerCase();
-    const rows = tm.filter((r) => !q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q));
+    const rows = tm.filter((r) => (!tmAm.value || amOf.get(r.shop) === tmAm.value) && (!q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q))).map((r) => ({ ...r, _am: amOf.get(r.shop) }));
     drawTable($('tm-table'), rows, [
       { key: 'shop', label: 'Shop', freeze: true }, tierCol('shop'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+      { key: '_am', label: 'AM', cls: 'l' },
       { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASS', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
       { key: 'pt_hours', label: 'PT hrs', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs', fmt: fmtH },
-      { key: 'c_mgmt', label: lblMgmt().replace(/ /g, '') + ' cost', fmt: fmtN, get: (r) => grp(r).mgmt },
+      ...(DATA.tm_excl_dmam ? [] : [{ key: 'c_mgmt', label: lblMgmt().replace(/ /g, '') + ' cost', fmt: fmtN, get: (r) => grp(r).mgmt }]),
       { key: 'c_ss', label: lblSs().replace(/ /g, '') + ' cost', fmt: fmtN, get: (r) => grp(r).ss },
       { key: 'c_sa', label: 'SA cost', fmt: fmtN, get: (r) => grp(r).sa },
       { key: 'c_pt', label: 'PT cost', fmt: fmtN, get: (r) => grp(r).pt },
@@ -830,7 +896,7 @@
     const allRow = { shop: 'All', shop_name: 'All shops shown', _pin: true, _cls: 'tot', _g: mkG({ mgmt: sum('mgmt'), ss: sum('ss'), sa: sum('sa'), pt: sum('pt'), os: sum('os'), ot: sum('ot'), tr: sum('tr') }) };
     drawTable($('dist-table'), rows.concat([allRow]), [
       { key: 'shop', label: 'Shop', freeze: true }, tierCol('shop'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: 'd_mgmt', label: lblMgmt().replace(/ /g, '') + ' %', fmt: fmtP, get: share('mgmt') },
+      ...(DATA.tm_excl_dmam ? [] : [{ key: 'd_mgmt', label: lblMgmt().replace(/ /g, '') + ' %', fmt: fmtP, get: share('mgmt') }]),
       { key: 'd_ss', label: lblSs().replace(/ /g, '') + ' %', fmt: fmtP, get: share('ss') },
       { key: 'd_sa', label: 'SA %', fmt: fmtP, get: share('sa') },
       { key: 'd_other', label: 'PT, OS & others %', fmt: fmtP, get: share('other') },

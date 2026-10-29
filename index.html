@@ -807,8 +807,9 @@
       { key: 'ptos', label: 'Of which PT + OS', fmt: fmtN },
       { key: 'ptos_share', label: 'PT + OS share', fmt: fmtP },
     ]);
-    document.querySelectorAll('.tm-src').forEach((el) => { el.textContent = `來源：${DATA.tm_tab || ''}。` + (DATA.tm_um_split ? 'UM 同 SS、ASS 一齊計。' : 'Source 將 DM、AM、UM 合埋計。'); });
-    document.querySelectorAll('.tm-proj-note').forEach((el) => { el.textContent = DATA.tm_um_split ? '固定成本按全月計，外判用外判更表，交通津貼當合資格同事全部達標。' : '其他項目（FT、外判、OT、交通津貼）同實際一樣，跟 source sheet 嘅 projection 計法。'; });
+    const ftR = DATA.tm_ft_ratio;
+    document.querySelectorAll('.tm-src').forEach((el) => { el.textContent = `來源：${DATA.tm_tab || ''}。` + (ftR != null ? `FT（DM、AM、UM、SS、ASS、SA）按日累計：全月人工 × ${d3.format('.1%')(ftR)}（已過日數 ÷ 當月日數）。` : 'FT 按日累計（source 已計）。') + (DATA.tm_um_split ? 'UM 同 SS、ASS 一齊計。' : 'Source 將 DM、AM、UM 合埋計。'); });
+    document.querySelectorAll('.tm-proj-note').forEach((el) => { el.textContent = DATA.tm_um_split || ftR == null ? '固定成本按全月計，外判用外判更表，交通津貼當合資格同事全部達標。' : 'FT 用全月人工；外判、OT、交通津貼同 source sheet 一樣（外判已係全月外判更表）。'; });
     drawMix($('mix'), tm, grp);
     drawMix($('mix-proj'), tm, grpP);
     const q = tmSearch.value.trim().toLowerCase();

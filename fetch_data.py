@@ -132,6 +132,21 @@ def fetch_pos(get):
         return None
 
 
+MD_COLS = ["shop_code", "shop_name", "gmv", "net_sale", "md", "promo", "md_rate", "qty"]
+
+
+def fetch_md(get):
+    """Manual Discount by shop, copied from Tableau into the POS sheet's 'Manual Discount' tab (optional)."""
+    try:
+        shops, _ = parse_pos(get(POS_SHEET, "'Manual Discount'!A1:H200"), MD_COLS, {"shop_code", "shop_name"})
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B12") if r}
+        return {"shops": [s for s in shops if s.get("shop_code")], "period": info.get("MD period", ""),
+                "exported_at": info.get("MD exported at", ""), "tableau_updated": info.get("MD Tableau last update", "")}
+    except Exception as e:
+        print(f"Manual Discount tab not read: {e}", file=sys.stderr)
+        return None
+
+
 def parse_dop_target(values):
     """'Oct Target' tab: two blocks (AM, DM) of name / Target / Proj. DOP / Project Achievement / Difference."""
     out = {"am": [], "dm": [], "note": ""}
@@ -332,6 +347,7 @@ def fetch_all():
         "tm_budget": fetch_budget(get, raw["_date"]),
         "dm_ex": dm_ex, "am_ex": am_ex,
         "pos": fetch_pos(get),
+        "md": fetch_md(get),
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),

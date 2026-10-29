@@ -216,10 +216,22 @@
 
   <!-- Manual Discount -->
   <section class="pane" id="discount" role="tabpanel" aria-labelledby="tab-discount" hidden>
-    <div class="wait">
+    <div class="stamp" id="stamp-md"></div>
+    <div class="wait" id="md-missing" hidden>
       <h2>Manual Discount</h2>
-      <p>每間舖嘅 Manual discount 來自 Tableau 報表 <i>O2O Report › Manual Discount</i>。</p>
-      <p>同 POS achievement 一樣，數據放入 Google Sheet 之後就會喺呢度顯示。</p>
+      <p>未有 Manual discount 數據，資料來自 O2O POS Target (Tableau) Google Sheet 嘅「Manual Discount」tab。</p>
+    </div>
+    <div class="sec" id="md-body">
+      <p class="note" id="md-note"></p>
+      <div class="tiles" id="md-kpis"></div>
+      <div class="grid">
+        <div class="card"><h3>Manual discount by DM</h3><p class="note">MD rate = Manual discount ÷（Store GMV + Manual discount），同 Tableau 計法一樣。合計用 Σ 計，唔係平均每間舖嘅 %。</p><div class="scroll"><table id="md-dm-table"></table></div></div>
+        <div class="card"><h3>Manual discount by AM</h3><p class="note">按 AM 加埋佢管嘅舖。</p><div class="scroll"><table id="md-am-table"></table></div></div>
+        <div class="card"><h3>Manual discount by shop</h3><p class="note">Store GMV 係扣咗 manual discount 之後嘅銷售；Net Sale = Store GMV − Promotion discount。MD rate 高過整體平均 1.5 倍會標紅。</p>
+          <div class="ctrl"><select id="md-am-filter" aria-label="Filter by AM"></select><input id="md-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
+          <div class="scroll"><table id="md-table"></table></div></div>
+        <div class="card"><h3>MD rate by shop</h3><p class="note">由高至低排，用同上面個表一樣嘅篩選。虛線 = 整體 MD rate。</p><div class="chart" id="md-chart"></div></div>
+      </div>
     </div>
   </section>
 </div>
@@ -667,6 +679,72 @@
     drawAch($('pos-chart'), rows);
   }
 
+  // Manual Discount (Tableau "Manual Discount › Shop View", copied into the POS sheet)
+  const mdAm = $('md-am-filter'), mdSearch = $('md-search');
+  mdAm.addEventListener('change', () => draw()); mdSearch.addEventListener('input', () => draw());
+  const mdRate = (r) => (r.gmv || 0) + (r.md || 0) ? (r.md || 0) / ((r.gmv || 0) + (r.md || 0)) : null;
+  function drawRate(el, rows, avg) {
+    el.replaceChildren();
+    const data = rows.filter((r) => r.md_rate != null).sort((a, b) => b.md_rate - a.md_rate);
+    if (!data.length || !el.clientWidth) return;
+    const W = el.clientWidth, rowH = 16, top = 8, H = top + data.length * rowH + 24, labW = 44;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('font-size', 10.5).style('font-family', 'var(--sans)');
+    const x = d3.scaleLinear([0, d3.max(data, (d) => d.md_rate) || 0.01], [labW, W - 48]).nice();
+    svg.append('g').selectAll('line').data(x.ticks(5)).join('line').attr('x1', x).attr('x2', x).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--grid)');
+    svg.append('g').selectAll('text').data(x.ticks(5)).join('text').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').style('fill', 'var(--muted)').text(d3.format('.0%'));
+    svg.append('g').selectAll('text').data(data).join('text').attr('x', 0).attr('y', (d, i) => top + i * rowH + 11).style('fill', 'var(--fg)').text((d) => d.shop_code);
+    svg.append('g').selectAll('rect').data(data).join('rect').attr('x', x(0)).attr('y', (d, i) => top + i * rowH + 3).attr('height', rowH - 5).attr('rx', 3)
+      .attr('width', (d) => Math.max(1, x(d.md_rate) - x(0))).style('fill', (d) => avg && d.md_rate > avg * 1.5 ? 'var(--bad)' : (avg && d.md_rate > avg ? 'var(--muted)' : 'var(--accent)'))
+      .append('title').text((d) => `${d.shop_code} ${d.shop_name}: ${d3.format('.1%')(d.md_rate)}（${fmtN(d.md)}）`);
+    svg.append('g').selectAll('text.v').data(data).join('text').attr('y', (d, i) => top + i * rowH + 11).attr('x', (d) => x(d.md_rate) + 4).style('fill', 'var(--muted)').text((d) => d3.format('.1%')(d.md_rate));
+    if (avg) svg.append('line').attr('x1', x(avg)).attr('x2', x(avg)).attr('y1', top).attr('y2', H - 20).style('stroke', 'var(--fg)').attr('stroke-dasharray', '4 3');
+  }
+
+  function drawMd() {
+    const M = DATA.md;
+    $('md-missing').hidden = !!M; $('md-body').hidden = !M;
+    if (!M) return;
+    // DM / AM for each shop: from the POS sheet first, else the DOP bot shop list
+    const team = new Map();
+    (DATA.shops || []).forEach((r) => team.set(r.shop_code, { dm: r.dm, am: r.am }));
+    ((DATA.pos || {}).shops || []).forEach((r) => team.set(r.shop_code, { dm: r.dm, am: r.am }));
+    const all = M.shops.map((r) => { const t = team.get(r.shop_code) || {}; const o = { ...r, dm: t.dm || '—', am: t.am || '—' }; o.md_rate = mdRate(o); return o; });
+    const inTier = all.filter((r) => passTier(r.shop_code));
+    const sum = (rows) => { const o = { shops: rows.length }; ['gmv', 'net_sale', 'md', 'promo', 'qty'].forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); }); o.md_rate = mdRate(o); o.md_per_shop = rows.length ? o.md / rows.length : null; return o; };
+    const T = sum(inTier);
+    const noTeam = all.filter((r) => r.am === '—').map((r) => r.shop_code);
+    $('md-note').textContent = `來自 Tableau（O2O Report › Manual Discount › Shop View），${M.period}。包括全部舖（連 outlet 同 EPR）。` + (noTeam.length ? ` ${noTeam.join('、')} 喺 POS / DOP Sheet 搵唔到 AM，所以 AM / DM 表顯示「—」。` : '');
+    tiles($('md-kpis'), [
+      ['Store GMV', fmtK(T.gmv), { hint: '月初至今' }], ['Manual discount', fmtK(T.md), { hint: `${T.shops} 間舖` }],
+      ['MD rate', fmtP(T.md_rate), { hint: 'MD ÷（GMV + MD）' }], ['Avg MD per shop', fmtK(T.md_per_shop)],
+      ['Promotion discount', fmtK(T.promo)], ['Shop Qty sold', fmtK(T.qty)],
+    ]);
+    const group = (key) => {
+      const g = d3.rollups(inTier, (v) => sum(v), (r) => r[key]).map(([name, o]) => ({ [key]: name, ...o })).sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+      return g.concat(g.length ? [{ [key]: 'Total', _pin: true, _cls: 'tot', ...T }] : []);
+    };
+    const rateTone = (v) => v == null || !T.md_rate ? '' : (v > T.md_rate * 1.5 ? 'neg' : '');
+    const gCols = (key, label, rows) => [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'gmv', label: 'Store GMV', fmt: fmtN },
+      { key: 'md', label: 'Manual discount', fmt: fmtN }, { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone, bar: { max: d3.max(rows.filter((r) => !r._pin), (r) => r.md_rate || 0) } },
+      { key: 'md_per_shop', label: 'Avg MD per shop', fmt: fmtN }, { key: 'promo', label: 'Promotion discount', fmt: fmtN }, { key: 'net_sale', label: 'Net Sale', fmt: fmtN }, { key: 'qty', label: 'Qty sold', fmt: fmtN }];
+    const dm = group('dm'), am = group('am');
+    drawTable($('md-dm-table'), dm, gCols('dm', 'DM', dm));
+    drawTable($('md-am-table'), am, gCols('am', 'AM', am));
+    const picked = mdAm.value; const ams = [...new Set(all.map((r) => r.am))].sort();
+    if (mdAm.options.length !== ams.length + 1) { mdAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); mdAm.value = picked; }
+    const q = mdSearch.value.trim().toLowerCase();
+    const rows = inTier.filter((r) => (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
+    const tot = { shop_code: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', ...sum(rows) };
+    drawTable($('md-table'), rows.concat(rows.length ? [tot] : []), [
+      { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+      { key: 'am', label: 'AM', cls: 'l', get: (r) => r._pin ? '' : r.am },
+      { key: 'gmv', label: 'Store GMV', fmt: fmtN }, { key: 'md', label: 'Manual discount', fmt: fmtN },
+      { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone, bar: { max: d3.max(rows, (r) => r.md_rate || 0) } },
+      { key: 'promo', label: 'Promotion discount', fmt: fmtN }, { key: 'net_sale', label: 'Net Sale', fmt: fmtN }, { key: 'qty', label: 'Qty sold', fmt: fmtN },
+    ]);
+    drawRate($('md-chart'), rows, T.md_rate);
+  }
+
   function drawDaily(el, days) {
     el.replaceChildren();
     if (!days.length || !el.clientWidth) return;
@@ -768,6 +846,8 @@
     stamp('stamp-dop', [['POS 銷售計到', d.pos_gpa || DATA.as_of], ['Pickup 同成本計到', costs], ['Source 更新', '每日下午 2 點'], ['Dashboard 更新', DATA.generated_at]]);
     stamp('stamp-tm', [['TM cost Sheet 版本', st.tm_version], ['每日 TM cost 計到', lastDay], ['PT 外判 Sheet 產生', st.tm_daily_generated], ['Dashboard 更新', DATA.generated_at]]);
     stamp('stamp-pos', [['Tableau 最後更新', P.tableau_updated], ['數據期間', P.period], ['由 Tableau 抄入', P.exported_at], ['Dashboard 更新', DATA.generated_at]]);
+    const M = DATA.md || {};
+    stamp('stamp-md', [['Tableau 最後更新', M.tableau_updated], ['數據期間', M.period], ['由 Tableau 抄入', M.exported_at], ['Dashboard 更新', DATA.generated_at]]);
   }
 
   function draw() {
@@ -781,6 +861,7 @@
     if (current === 'dop') drawDop();
     if (current === 'tm') drawTm();
     if (current === 'pos') drawPos();
+    if (current === 'discount') drawMd();
   }
   let rT; window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(draw, 150); });
 })();

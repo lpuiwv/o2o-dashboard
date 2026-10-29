@@ -157,7 +157,6 @@
       <div class="stack">
         <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − 前線 TM、office、disposal、租金、營運、倉庫及物流、capex 同 marketing 成本。100% commission target 同 commission 級別來自「（月份）Target %」tab；Commission now = Target tab 預計 DOP 做到嘅最高級別（低過 50% 級別即 0%）。Projected DOP、達標 % 同差距來自 Target tab（唔計 outlet，用 Target tab 自己嘅日數推算）。</p><div class="scroll"><table id="dm-table"></table></div></div>
         <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × 當月日數 ÷ 已有 POS 銷售嘅日數，同 Sheet 一樣。DOP ach. % 跟 Target tab 計法：預計 DOP ÷ target；target 係負數時用 target ÷ 預計 DOP。</p><div class="scroll"><table id="am-table"></table></div></div>
-        <div class="card" id="vs-target-card"><h3>Projected DOP vs 100% commission target</h3><p class="note">用 Target tab 嘅預計 DOP（唔計 outlet）對比每個 DM / AM 嘅 100% commission target。紅色 = 未達標，綠色 = 達標或以上；每行最右係差距。</p><div class="chart" id="vs-target-chart"></div></div>
         <div class="card"><h3>Shop count by DM and AM</h3><p class="note">而家範圍內嘅舖數，同預計月底 DOP 係正數嘅舖數。</p><div class="scroll"><table id="count-table"></table></div></div>
       </div>
     </div>
@@ -169,7 +168,6 @@
         <input id="search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops">
       </div>
       <div class="grid">
-        <div class="card"><h3>Top and bottom 10 by projected DOP</h3><p class="note">全月預計，HK$。橙色虛線係每間舖平均；滑鼠指住條 bar 睇詳情。</p><div class="chart" id="rank"></div></div>
         <div class="card"><h3>All shops</h3><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
       </div>
     </div>
@@ -221,7 +219,6 @@
         <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV 包 MKT fund 同 RM discount。今個月冇 target 嘅舖（例如 KSE）只列出參考，唔計入任何合計。</p>
           <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="pos-table"></table></div></div>
-        <div class="card"><h3>Projected achievement by shop</h3><p class="note">由高至低排，用同上面個表一樣嘅篩選。虛線 = target 100%。</p><div class="chart" id="pos-chart"></div></div>
       </div>
     </div>
   </section>
@@ -602,7 +599,6 @@
     $('mode-avg').setAttribute('aria-pressed', String(mode === 'avg'));
     drawTeam($('dm-table'), dm, 'dm', 'DM', scopeShops, ex);
     drawTeam($('am-table'), am, 'am', 'AM', scopeShops, ex);
-    drawVsTarget($('vs-target-chart'));
 
     // Shop count by DM > AM with subtotals
     const cnt = []; const byDm = d3.group(shops, (r) => r.dm);
@@ -634,7 +630,6 @@
       { key: 'vs_avg', label: 'Proj. DOP vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
     ]);
     $('shop-count').textContent = `顯示 ${rows.length} 間舖。撳欄名可以排序。TM / GP = 前線 TM cost ÷ (POS GPA + pickup GPA)。以每間舖平均做 baseline，「vs avg」顯示每間舖高過或低過平均幾多。「Excl. Outlet & EPR」唔計 SWH、CHE 同 EPR。`;
-    drawRank($('rank'), rows, avgRow.proj_dop);
 
   }
 
@@ -705,7 +700,6 @@
     const q = posSearch.value.trim().toLowerCase();
     const rows = P.shops.filter((r) => passTier(r.shop_code) && (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
     drawTable($('pos-table'), rows, posCols(rows, true));
-    drawAch($('pos-chart'), rows);
   }
 
   // Manual Discount (Tableau "Manual Discount › Shop View", copied into the POS sheet)

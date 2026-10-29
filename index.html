@@ -847,7 +847,7 @@
     // Four lines per tab (Vivian's format): source update time, data period, data import time, latest update time
     const period = (end) => { if (!end) return ''; const m = String(end).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? `01/${m[2].padStart(2, '0')}/${m[3]} – ${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}` : end; };
     const salesTo = d.pos_gpa || DATA.as_of;
-    const L = { src: 'Datasource update time', per: 'Data period', imp: 'Data import time', upd: 'Latest update time' };
+    const L = { src: '數據源更新時間', per: '數據期間', imp: '數據匯入時間', upd: '最後更新時間' };
     stamp('stamp-dop', [[L.src + '（Google Sheet）', '每日下午 2:00'], [L.per, period(salesTo) + (costs && costs !== salesTo ? `（成本計到 ${costs}）` : '')], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
     stamp('stamp-tm', [[L.src + '（Google Sheet）', '每日上午 9:45'], [L.per, period(lastDay)], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
     const P = DATA.pos || {}, M = DATA.md || {};

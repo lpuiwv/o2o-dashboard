@@ -78,7 +78,7 @@
   .callout b { color: var(--warn); font-weight: 600; }
   .callout ul { margin: 0; padding-left: 18px; }
   .callout.plain { background: var(--panel); color: var(--muted); }
-  .stamp { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--muted); border-left: 3px solid var(--accent); padding: 4px 0 4px 10px; }
+  .stamp { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); border-left: 3px solid var(--accent); padding: 4px 0 4px 10px; }
   .stamp b { color: var(--fg); font-weight: 600; }
   .callout.plain b { color: var(--fg); }
   .mix .row.sub { font-weight: 600; color: var(--muted); }
@@ -559,7 +559,7 @@
     // Data checks shown to the reader
     const d = DATA.dates || {};
     const salesDate = d.pos_gpa || DATA.as_of, costDates = [...new Set(['pickup_gpa', 'tm_cost', 'office_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex'].map((k) => d[k]).filter(Boolean))];
-    $('dop-dates').textContent = 'Source sheets update every day at 2pm; this dashboard refreshes at 2:30pm. ' + (costDates.length ? `POS sales, disposal and marketing up to ${salesDate}; pickup GPA and other costs up to ${costDates.join(', ')}.` : `Month to date up to ${DATA.as_of}.`);
+    $('dop-dates').textContent = costDates.length ? `POS 銷售、disposal 同 marketing 計到 ${salesDate}；pickup GPA 同其他成本計到 ${costDates.join('、')}。` : `月初至今計到 ${DATA.as_of}。`;
     const checks = [];
     if (costDates.some((c) => c !== salesDate)) checks.push(`Source 日期唔一致：POS 銷售計到 ${salesDate}，但大部分成本計到 ${costDates.join(', ')}。DOP 同預計 DOP 多計咗一日成本但未計嗰日銷售，所以會睇落差過實際，等 Sheet 追返就會正常。`);
     const high = shops.filter((r) => r.pos_gp_pct > GP_FLAG);
@@ -647,7 +647,7 @@
     const ts = P.shops.filter((r) => hasTarget(r) && passTier(r.shop_code)); const sm = (k) => d3.sum(ts, (r) => r[k] || 0);
     const t = { target: sm('target'), pos_gmv: sm('pos_gmv'), proj_gmv: sm('proj_gmv') };
     t.current_ach = t.target ? t.pos_gmv / t.target : null; t.proj_ach = t.target ? t.proj_gmv / t.target : null;
-    $('pos-note').textContent = `來自 Tableau（O2O Report › Shop Monthly Target），${P.period}。每日上午 10 點更新。` + (noTarget.length ? ` ${noTarget.join('、')} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）。` : '');
+    $('pos-note').textContent = `來自 Tableau（O2O Report › Shop Monthly Target），${P.period}。` + (noTarget.length ? ` ${noTarget.join('、')} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）。` : '');
     tiles($('pos-kpis'), [
       ['POS GMV target', fmtK(t.target), { hint: '全月' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: '月初至今' }],
       ['Current achievement', fmtP(t.current_ach)], ['Projected POS GMV', fmtK(t.proj_gmv)],
@@ -842,12 +842,15 @@
     const costs = [...new Set(['pickup_gpa', 'tm_cost', 'office_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex'].map((k) => d[k]).filter(Boolean))].join(', ');
     const st = DATA.stamps || {};
     const days = Object.keys(DATA.tm_by_day || {}); const lastIso = days.length ? days[days.length - 1] : ''; const lastDay = lastIso ? `${lastIso.slice(8, 10)}/${lastIso.slice(5, 7)}/${lastIso.slice(0, 4)}` : '';
-    const P = DATA.pos || {};
-    stamp('stamp-dop', [['POS 銷售計到', d.pos_gpa || DATA.as_of], ['Pickup 同成本計到', costs], ['Source 更新', '每日下午 2 點'], ['Dashboard 更新', DATA.generated_at]]);
-    stamp('stamp-tm', [['TM cost Sheet 版本', st.tm_version], ['每日 TM cost 計到', lastDay], ['PT 外判 Sheet 產生', st.tm_daily_generated], ['Dashboard 更新', DATA.generated_at]]);
-    stamp('stamp-pos', [['Tableau 最後更新', P.tableau_updated], ['數據期間', P.period], ['由 Tableau 抄入', P.exported_at], ['更新時間', '每日上午 10 點'], ['Dashboard 更新', DATA.generated_at]]);
-    const M = DATA.md || {};
-    stamp('stamp-md', [['Tableau 最後更新', M.tableau_updated], ['數據期間', M.period], ['由 Tableau 抄入', M.exported_at], ['更新時間', '每日上午 10 點'], ['Dashboard 更新', DATA.generated_at]]);
+    // Four lines per tab (Vivian's format): source update time, data period, data import time, latest update time
+    const period = (end) => { if (!end) return ''; const m = String(end).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? `01/${m[2].padStart(2, '0')}/${m[3]} – ${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}` : end; };
+    const salesTo = d.pos_gpa || DATA.as_of;
+    const L = { src: 'Datasource update time', per: 'Data period', imp: 'Data import time', upd: 'Latest update time' };
+    stamp('stamp-dop', [[L.src + '（Google Sheet）', '每日下午 2:00'], [L.per, period(salesTo) + (costs && costs !== salesTo ? `（成本計到 ${costs}）` : '')], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
+    stamp('stamp-tm', [[L.src + '（Google Sheet）', '每日上午 9:45'], [L.per, period(lastDay)], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
+    const P = DATA.pos || {}, M = DATA.md || {};
+    stamp('stamp-pos', [[L.src + '（Tableau）', '每日上午約 9:00' + (P.tableau_updated ? `（今次：${P.tableau_updated}）` : '')], [L.per, P.period], [L.imp, P.exported_at], [L.upd, DATA.generated_at]]);
+    stamp('stamp-md', [[L.src + '（Tableau）', '每日上午約 9:00' + (M.tableau_updated ? `（今次：${M.tableau_updated}）` : '')], [L.per, M.period], [L.imp, M.exported_at], [L.upd, DATA.generated_at]]);
   }
 
   function draw() {

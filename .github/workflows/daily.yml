@@ -10,7 +10,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write   # to save history/tm_proj.enc.json (encrypted daily TM projection snapshots)
   pages: write
   id-token: write
 
@@ -37,6 +37,15 @@ jobs:
         env:
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
           DASH_PASSWORD: ${{ secrets.DASH_PASSWORD }}
+      - name: Save TM projection history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add history/tm_proj.enc.json
+          if ! git diff --cached --quiet; then
+            git commit -q -m "TM projection history $(TZ=Asia/Hong_Kong date +%F)"
+            git pull -q --rebase origin main && git push -q origin HEAD:main || echo "history not pushed (will retry next run)"
+          fi
       # Cloudflare Pages copy, protected by Cloudflare Access (email one-time PIN, allowed emails only).
       # Skipped until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist.
       - name: Deploy to Cloudflare Pages

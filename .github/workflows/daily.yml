@@ -2,7 +2,8 @@ name: Daily dashboard refresh
 
 on:
   schedule:
-    - cron: "30 1 * * *"   # 09:30 Hong Kong time, every day
+    - cron: "30 1 * * *"   # 09:30 Hong Kong time, every day (TM cost sheet)
+    - cron: "30 6 * * *"   # 14:30 Hong Kong time, every day (DOP sheets update at 2pm; Tableau POS / Manual Discount written at 10:07)
   workflow_dispatch:        # "Run workflow" button for a manual refresh
   push:
     branches: [main]

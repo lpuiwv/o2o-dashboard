@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: "15 2 * * *"   # 10:15 Hong Kong time, every day (TM cost sheet; Tableau POS / Manual Discount copied at 09:27)
     - cron: "30 6 * * *"   # 14:30 Hong Kong time, every day (DOP sheets update at 2pm; Tableau POS / Manual Discount written at 09:27)
+    - cron: "5 16 31 10 *" # 00:05 Hong Kong time on 1 Nov: run once so the GitHub Pages link closes (see "Close" step)
   workflow_dispatch:        # "Run workflow" button for a manual refresh
   push:
     branches: [main]
@@ -46,9 +47,24 @@ jobs:
         run: |
           npx --yes wrangler@3 pages project create o2o-shop-dash --production-branch=main || true
           npx --yes wrangler@3 pages deploy site --project-name=o2o-shop-dash --branch=main --commit-dirty=true
+      # Vivian, 29/10/2026: the GitHub Pages link (lpuiwv.github.io/o2o-dashboard) stops on 1 Nov 2026 (HKT).
+      # From then on GitHub Pages only gets a "link closed" page with no data; the repo, sheets and Cloudflare copy are kept.
+      - name: Close the GitHub Pages link from 1 Nov 2026 (HKT)
+        run: |
+          mkdir -p pages_out
+          if [ "$(TZ=Asia/Hong_Kong date +%Y%m%d)" -ge 20261101 ]; then
+            cat > pages_out/index.html <<'HTML'
+          <!doctype html><html lang="zh-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+          <title>O2O Dashboard</title><style>body{font-family:system-ui,sans-serif;background:#f6f6f3;color:#222;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px}div{max-width:420px;text-align:center}h1{font-size:20px}p{color:#555;line-height:1.6}</style></head>
+          <body><div><h1>O2O Dashboard (Shop ver.)</h1><p>呢個網址已於 2026 年 11 月 1 日停用。<br>Dashboard 會搬去新網址，請向 Vivian 索取。</p></div></body></html>
+          HTML
+            printf 'User-agent: *\nDisallow: /\n' > pages_out/robots.txt
+          else
+            cp -r site/. pages_out/
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: pages_out
       - id: deploy
         uses: actions/deploy-pages@v4

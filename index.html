@@ -647,7 +647,7 @@
     const ts = P.shops.filter((r) => hasTarget(r) && passTier(r.shop_code)); const sm = (k) => d3.sum(ts, (r) => r[k] || 0);
     const t = { target: sm('target'), pos_gmv: sm('pos_gmv'), proj_gmv: sm('proj_gmv') };
     t.current_ach = t.target ? t.pos_gmv / t.target : null; t.proj_ach = t.target ? t.proj_gmv / t.target : null;
-    $('pos-note').textContent = `來自 Tableau（O2O Report › Shop Monthly Target），${P.period}。每日 10:07 更新。` + (noTarget.length ? ` ${noTarget.join('、')} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）。` : '');
+    $('pos-note').textContent = `來自 Tableau（O2O Report › Shop Monthly Target），${P.period}。每日上午 10 點更新。` + (noTarget.length ? ` ${noTarget.join('、')} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）。` : '');
     tiles($('pos-kpis'), [
       ['POS GMV target', fmtK(t.target), { hint: '全月' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: '月初至今' }],
       ['Current achievement', fmtP(t.current_ach)], ['Projected POS GMV', fmtK(t.proj_gmv)],
@@ -845,9 +845,9 @@
     const P = DATA.pos || {};
     stamp('stamp-dop', [['POS 銷售計到', d.pos_gpa || DATA.as_of], ['Pickup 同成本計到', costs], ['Source 更新', '每日下午 2 點'], ['Dashboard 更新', DATA.generated_at]]);
     stamp('stamp-tm', [['TM cost Sheet 版本', st.tm_version], ['每日 TM cost 計到', lastDay], ['PT 外判 Sheet 產生', st.tm_daily_generated], ['Dashboard 更新', DATA.generated_at]]);
-    stamp('stamp-pos', [['Tableau 最後更新', P.tableau_updated], ['數據期間', P.period], ['由 Tableau 抄入', P.exported_at], ['Dashboard 更新', DATA.generated_at]]);
+    stamp('stamp-pos', [['Tableau 最後更新', P.tableau_updated], ['數據期間', P.period], ['由 Tableau 抄入', P.exported_at], ['更新時間', '每日上午 10 點'], ['Dashboard 更新', DATA.generated_at]]);
     const M = DATA.md || {};
-    stamp('stamp-md', [['Tableau 最後更新', M.tableau_updated], ['數據期間', M.period], ['由 Tableau 抄入', M.exported_at], ['Dashboard 更新', DATA.generated_at]]);
+    stamp('stamp-md', [['Tableau 最後更新', M.tableau_updated], ['數據期間', M.period], ['由 Tableau 抄入', M.exported_at], ['更新時間', '每日上午 10 點'], ['Dashboard 更新', DATA.generated_at]]);
   }
 
   function draw() {

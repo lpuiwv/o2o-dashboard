@@ -184,6 +184,17 @@
     <div class="grid">
       <div class="card"><h3>Where the TM cost goes — Actual</h3><p class="note">全部舖月初至今嘅實際 TM cost 按組別分，HK$。圓心係 PT 佔幾多 %。<span class="tm-src"></span></p><div class="pie" id="mix"></div></div>
       <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。PT 用 roster 全月時數計；<span class="tm-proj-note"></span></p><div class="pie" id="mix-proj"></div></div>
+      <div class="card" id="tt-card" hidden>
+        <h3>TM cost vs target</h3>
+        <p class="note">Target = 「O2O Shop Target 2026」sheet 嘅「<span class="tt-mon"></span> TM cost target」：每間舖 TM cost ÷（POS GPA + Pickup GPA）嘅目標 %（Pickup GPA = pickup GMV × 6.9%）。Actual % = 月初至今 TM cost (Frontline) ÷（POS GPA + Pickup GPA），用 DOP sheet「Raw」每日數，計 <span class="tt-days"></span>。Projected % = 全月預計 TM cost（TM cost sheet，按 roster 計）÷ 預計 GPA（月初至今 GPA ÷ 已有日數 × 全月日數）。Target TM cost = target % × target GPA（Shop version：POS GPA target + pickup GMV target × 6.9%）。DM / AM 合計 % = Σ TM cost ÷ Σ GPA。Projected % 高過 target 係紅色，唔超係綠色。跟 Shop tier 篩選。</p>
+        <h4 class="sub-h">By DM</h4>
+        <div class="scroll"><table id="tt-dm-table"></table></div>
+        <h4 class="sub-h">By AM</h4>
+        <div class="scroll"><table id="tt-am-table"></table></div>
+        <h4 class="sub-h">By shop</h4>
+        <div class="ctrl"><select id="tt-am-filter" aria-label="Filter by AM"></select><input id="tt-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
+        <div class="scroll"><table id="tt-shop-table"></table></div>
+      </div>
       <div class="card">
         <h3>TM cost by shop</h3>
         <p class="note">成本已包上面講嘅 overhead。Projected TM cost = 按 roster 計每間舖全月成本。</p>
@@ -930,6 +941,53 @@
     ]);
   }
 
+
+  // TM cost vs target (Vivian, 2/11/2026): target % per shop from "<Mon> TM cost target"; % = TM cost ÷ (POS GPA + Pickup GPA)
+  const ttAm = $('tt-am-filter'), ttSearch = $('tt-search');
+  ttAm.addEventListener('change', () => draw()); ttSearch.addEventListener('input', () => draw());
+  function drawTmTarget() {
+    const T = DATA.tm_target, cardEl = $('tt-card');
+    cardEl.hidden = !(T && T.shops && T.shops.length); if (cardEl.hidden) return;
+    document.querySelectorAll('.tt-mon').forEach((el) => { el.textContent = (DATA.month || '').split(' ')[0].slice(0, 3); });
+    const iso = (x) => x ? `${x.slice(8, 10)}/${x.slice(5, 7)}` : '';
+    document.querySelectorAll('.tt-days').forEach((el) => { el.textContent = T.days ? `${iso(T.from)} – ${iso(T.to)}（${T.days} 日，全月 ${T.days_in_month} 日）` : '（未有本月數據）'; });
+    const shops = T.shops.filter((r) => passTier(r.shop_code)).map((r) => {
+      const tgtGpa = r.target_gpa ?? r.proj_gpa;
+      return { ...r, _tgt_tm: tgtGpa != null ? r.target_pct * tgtGpa : null, _tgt_gpa: tgtGpa };
+    });
+    const ratio = (a, b) => (a != null && b) ? a / b : null;
+    const agg = (rows, extra) => {
+      const s = (k) => rows.some((r) => r[k] != null) ? d3.sum(rows, (r) => r[k] || 0) : null;
+      const tg = d3.sum(rows, (r) => r._tgt_gpa || 0), tt = d3.sum(rows, (r) => r._tgt_tm || 0);
+      return { ...extra, shops: rows.length, tm: s('tm'), gpa: s('gpa'), proj_tm: s('proj_tm'), proj_gpa: s('proj_gpa'), _tgt_tm: tt, target_pct: tg ? tt / tg : null };
+    };
+    const groupBy = (k) => [...d3.group(shops, (r) => r[k] || '—')].sort((a, b) => String(a[0]).localeCompare(String(b[0]))).map(([name, rows]) => agg(rows, { [k]: name }));
+    const total = agg(shops, { _pin: true, _cls: 'tot' });
+    const over = (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos');
+    const sgn = (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v);
+    const pp = (v) => v == null ? '' : (v > 0 ? '+' : '') + d3.format('.1f')(v * 100) + ' pp';
+    const cols = (first) => [
+      ...first,
+      { key: 'target_pct', label: 'Target %', fmt: fmtP },
+      { key: 'a_pct', label: 'Actual % (MTD)', fmt: fmtP, get: (r) => ratio(r.tm, r.gpa) },
+      { key: 'p_pct', label: 'Projected %', fmt: fmtP, get: (r) => ratio(r.proj_tm, r.proj_gpa) },
+      { key: 'p_vs', label: 'Projected vs target', fmt: pp, tone: over, get: (r) => { const p = ratio(r.proj_tm, r.proj_gpa); return p == null || r.target_pct == null ? null : p - r.target_pct; } },
+      { key: 'tm', label: 'TM cost (MTD)', fmt: fmtN }, { key: 'gpa', label: 'GPA (MTD)', fmt: fmtN },
+      { key: '_tgt_tm', label: 'Target TM cost', fmt: fmtN },
+      { key: 'proj_tm', label: 'Projected TM cost', fmt: fmtN },
+      { key: 'd_tm', label: 'Projected vs target TM cost', fmt: sgn, tone: over, get: (r) => r.proj_tm == null || r._tgt_tm == null ? null : r.proj_tm - r._tgt_tm },
+    ];
+    drawTable($('tt-dm-table'), groupBy('dm').concat([{ ...total, dm: 'Total' }]), cols([{ key: 'dm', label: 'DM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }]));
+    drawTable($('tt-am-table'), groupBy('am').concat([{ ...total, am: 'Total' }]), cols([{ key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }]));
+    const ams = [...new Set(shops.map((r) => r.am))].sort(); const picked = ttAm.value;
+    if (ttAm.options.length !== ams.length + 1) { ttAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); ttAm.value = picked; }
+    const q = ttSearch.value.trim().toLowerCase();
+    const rows = shops.filter((r) => (!ttAm.value || r.am === ttAm.value) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
+    drawTable($('tt-shop-table'), rows.concat([{ ...agg(rows, { _pin: true, _cls: 'tot' }), shop_code: 'Total', shop_name: 'All shops shown' }]), cols([
+      { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+      { key: 'am', label: 'AM', cls: 'l' }, { key: 'um', label: 'UM / SS', cls: 'l' }]));
+  }
+
   const tierSel = document.getElementById('tier-filter');
   tierSel.addEventListener('change', () => draw());
   // "Data updated" line at the top of each tab
@@ -962,7 +1020,7 @@
     document.getElementById('tier-note').hidden = !tierSel.value; document.getElementById('tier-note').textContent = tierSel.value ? 'Tier 篩選會套用喺所有舖嘅表、圖、舖數、TM cost 同 POS 數字。DM / AM summary、DOP 頂部數字仍然係 Sheet 嘅全部舖合計。' : '';
     $('updated').textContent = `${DATA.month} · ${DATA.generated_at} 由 DOP 同 TM cost Google Sheet 更新`;
     if (current === 'dop') drawDop();
-    if (current === 'tm') drawTm();
+    if (current === 'tm') { drawTm(); drawTmTarget(); }
     if (current === 'pos') drawPos();
     if (current === 'discount') drawMd();
   }

@@ -196,6 +196,8 @@ def parse_tm_v1(values):
         return [i for i in range(lo, hi + 1) for p in prefixes if head[i].startswith(p)]
 
     um_split = bool(find(["UM/SS/ASS 成本"], 0, cut))
+    tgt_i = [i for i, h in enumerate(head) if "TM Cost (excl" in h and "DEF" not in h]
+    def_i = [i for i, h in enumerate(head) if "TM Cost DEF" in h]
 
     def block(r, lo, hi):
         v = lambda ps: sum(num(r[i]) or 0 for i in find(ps, lo, hi) if i < len(r))
@@ -219,7 +221,9 @@ def parse_tm_v1(values):
         rows.append({"shop": code, "shop_name": r[1], "ss_n": cnt(["SS/AS 人數", "SS 人數"]), "assp_n": cnt(["AS 人數"]),
                      "sa_n": cnt(["SA 人數"]), "um_n": cnt(["UM 人數"]), "pt_hours": cnt(["PT 時數"]), "os_hours": cnt(["外判時數"]),
                      "total_cost": act["total"], "roster_total_cost": proj["total"], "act": act, "proj": proj,
-                     "am": str(r[2]).strip(), "proj_n": proj_n})
+                     "am": str(r[2]).strip(), "proj_n": proj_n,
+                     # "<Mon> TM Cost (excl. DMAM)" = target TM cost; "… DEF …" = target − projection (Vivian, 2/11/2026)
+                     "target_tm": next((num(r[i]) for i in tgt_i), None), "target_def": next((num(r[i]) for i in def_i), None)})
     return rows, um_split
 
 
@@ -365,6 +369,16 @@ def tm_stamps(raw):
     return {"tm_version": v.group(1) if v else "", "tm_daily_generated": g.group(1) if g else ""}
 
 
+def tm_actual_day(raw):
+    """Day of month the TM cost sheet's actual block runs to: 「實數（截至 1/11）」 in A1, else 「版本：YYYY-MM-DD」."""
+    head = cell_text(raw.get("tm_head"))
+    m = re.search(r"截至\s*(\d{1,2})/(\d{1,2})", head)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"版本[：:]\s*\d{4}-\d{2}-(\d{2})", head)
+    return int(m.group(1)) if m else None
+
+
 def classic_ft_ratio(raw):
     """Days so far / days in month for the classic tab's FT accrual: day of its "版本：YYYY-MM-DD" date (else today), capped at month end."""
     import calendar
@@ -448,28 +462,42 @@ def parse_raw_gpa(values):
     return dict(sorted(out.items()))
 
 
-def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None):
-    """Per shop: target %, actual % = Σ TM cost ÷ Σ (POS GPA + Pickup GPA) over the days that have TM cost,
-    projected % = projected full-month TM cost (TM cost sheet) ÷ projected GPA (month-to-date run rate)."""
+def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None, tm_to=None):
+    """Per shop (Vivian, 2/11/2026): TM cost figures from the TM cost sheet ('TM Cost by shop YYYYMM V1': actual to date,
+    full-month projection, "<Mon> TM Cost (excl. DMAM)" target, DEF = target − projection); target % from the
+    "<Mon> TM cost target" tab. GPA (POS GPA + Pickup GPA) from DOP 'Raw' for the same days as the TM actual
+    (tm_to = day of month in the sheet's 「截至 D/M」); projected GPA = month-to-date run rate."""
     if not target:
         return None
     days = parse_raw_gpa(raw_rows)
-    tm_days = [k for k, v in days.items() if any(x[2] and x[0] for x in v.values())]
-    last = max(tm_days) if tm_days else None
-    use = [k for k in days if last and k <= last]
+    if tm_to:
+        use = [k for k in days if int(k[8:10]) <= tm_to]
+    else:  # fall back to the days that have TM cost in Raw
+        tm_days = [k for k, v in days.items() if any(x[2] and x[0] for x in v.values())]
+        last = max(tm_days) if tm_days else None
+        use = [k for k in days if last and k <= last]
+    gdays = sorted(days)  # all days with GPA, for the run rate
     dim = calendar.monthrange(d.year, d.month)[1]
-    proj_tm = {r["shop"]: r["roster_total_cost"] for r in tm_rows}
+    tmr = {r["shop"]: r for r in tm_rows}
     shops = []
     for code, t in target.items():
-        tm = sum(days[k].get(code, [0, 0])[0] for k in use)
+        r = tmr.get(code, {})
         gpa = sum(days[k].get(code, [0, 0])[1] for k in use)
-        n = len(use)
-        pgpa = gpa / n * dim if n else None
+        if tm_to and use and len(use) < tm_to:  # Raw (2pm) is behind the TM sheet: scale GPA to the same number of days
+            gpa = gpa / len(use) * tm_to
+        gall = sum(days[k].get(code, [0, 0])[1] for k in gdays)
+        pgpa = gall / len(gdays) * dim if gdays else None
+        tm = r.get("total_cost") if r else sum(days[k].get(code, [0, 0])[0] for k in use)
+        tgt_tm = r.get("target_tm")
+        if tgt_tm is None and (gpa_target or {}).get(code) is not None:
+            tgt_tm = t["pct"] * gpa_target[code]
         shops.append({"shop_code": code, "shop_name": t["name"], "dm": t["dm"], "am": t["am"], "um": t["um"],
-                      "target_pct": t["pct"], "tm": round(tm, 2), "gpa": round(gpa, 2),
-                      "proj_tm": proj_tm.get(code), "proj_gpa": round(pgpa, 2) if pgpa is not None else None,
-                      "target_gpa": round((gpa_target or {}).get(code), 2) if (gpa_target or {}).get(code) is not None else None})
-    return {"shops": shops, "days": len(use), "from": use[0] if use else "", "to": last or "", "days_in_month": dim}
+                      "target_pct": t["pct"], "tm": round(tm, 2) if tm is not None else None, "gpa": round(gpa, 2),
+                      "proj_tm": r.get("roster_total_cost"), "proj_gpa": round(pgpa, 2) if pgpa is not None else None,
+                      "target_tm": round(tgt_tm, 2) if tgt_tm is not None else None, "target_def": r.get("target_def")})
+    end = f"{d:%Y-%m}-{tm_to:02d}" if tm_to else (use[-1] if use else "")
+    return {"shops": shops, "days": tm_to or len(use), "gpa_days": len(use), "from": f"{d:%Y-%m}-01", "to": end,
+            "gpa_to": use[-1] if use else "", "days_in_month": dim, "tm_source": "sheet" if tm_rows and "target_tm" in tm_rows[0] else "raw"}
 
 
 # ---------- fetching ----------
@@ -601,7 +629,7 @@ def fetch_all():
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
         "tm_target": tm_vs_target(parse_tm_target(raw.get("tm_target") or []), raw.get("raw") or [], tm, raw["_date"],
-                                  parse_shop_gpa_target(raw.get("gpa_target") or [])),
+                                  parse_shop_gpa_target(raw.get("gpa_target") or []), tm_actual_day(raw)),
         "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio, "tm_excl_dmam": excl_dmam,
         "_tm_month": f"{raw['_date']:%Y%m}",
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),

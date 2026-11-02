@@ -430,10 +430,10 @@ def parse_shop_gpa_target(values):
         if len(r) <= ci or not str(r[ci]).strip():
             continue
         gpa = num(r[gi]) if gi < len(r) else None
-        if gpa is None:  # no GPA target (e.g. outlets) -> skip
-            continue
         pk = num(r[pi]) if pi is not None and pi < len(r) else None
-        out[str(r[ci]).strip()] = gpa + (pk or 0) * 0.069
+        if gpa is None and pk is None:
+            continue
+        out[str(r[ci]).strip()] = (gpa or 0) + (pk or 0) * 0.069  # blank GPA (SWH, CHE, MSM) = 0, as the sheet does
     return out
 
 

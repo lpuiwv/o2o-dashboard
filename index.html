@@ -186,7 +186,7 @@
       <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。PT 用 roster 全月時數計；<span class="tm-proj-note"></span></p><div class="pie" id="mix-proj"></div></div>
       <div class="card" id="tt-card" hidden>
         <h3>TM cost vs target</h3>
-        <p class="note">Target = 「O2O Shop Target 2026」sheet 嘅「<span class="tt-mon"></span> TM cost target」：每間舖 TM cost ÷（POS GPA + Pickup GPA）嘅目標 %（Pickup GPA = pickup GMV × 6.9%）。Actual % = 月初至今 TM cost (Frontline) ÷（POS GPA + Pickup GPA），用 DOP sheet「Raw」每日數，計 <span class="tt-days"></span>。Projected % = 全月預計 TM cost（TM cost sheet，按 roster 計）÷ 預計 GPA（月初至今 GPA ÷ 已有日數 × 全月日數）。Target TM cost = target % × target GPA（Shop version：POS GPA target + pickup GMV target × 6.9%）。DM / AM 合計 % = Σ TM cost ÷ Σ GPA。Projected % 高過 target 係紅色，唔超係綠色。跟 Shop tier 篩選。</p>
+        <p class="note">TM cost 全部來自 TM cost sheet「<span class="tt-tab"></span>」（已剔除 DM、AM）：TM cost (MTD) = 實數小計（<span class="tt-days"></span>），Projected TM cost = Projection 合計，Target TM cost = 「<span class="tt-mon"></span> TM Cost (excl. DMAM)」，DEF = target − projection（負數 = 超咗 target，紅色）。Target % 來自「O2O Shop Target 2026」sheet 嘅「<span class="tt-mon"></span> TM cost target」：TM cost ÷（POS GPA + Pickup GPA）嘅目標（Pickup GPA = pickup GMV × 6.9%）。GPA 用 DOP sheet「Raw」每日數<span class="tt-gpa"></span>；預計 GPA = 月初至今 GPA ÷ 已有日數 × 全月日數。DM / AM 合計 % = Σ TM cost ÷ Σ GPA；合計 Target % = Σ Target TM cost ÷ Σ（Target TM cost ÷ 該舖 target %）。跟 Shop tier 篩選。</p>
         <h4 class="sub-h">By DM</h4>
         <div class="scroll"><table id="tt-dm-table"></table></div>
         <h4 class="sub-h">By AM</h4>
@@ -950,12 +950,11 @@
     cardEl.hidden = !(T && T.shops && T.shops.length); if (cardEl.hidden) return;
     document.querySelectorAll('.tt-mon').forEach((el) => { el.textContent = (DATA.month || '').split(' ')[0].slice(0, 3); });
     const iso = (x) => x ? `${x.slice(8, 10)}/${x.slice(5, 7)}` : '';
-    document.querySelectorAll('.tt-days').forEach((el) => { el.textContent = T.days ? `${iso(T.from)} – ${iso(T.to)}（${T.days} 日，全月 ${T.days_in_month} 日）` : '（未有本月數據）'; });
-    const shops = T.shops.filter((r) => passTier(r.shop_code)).map((r) => {
-      const tgtGpa = r.target_gpa ?? r.proj_gpa;
-      return { ...r, _tgt_tm: tgtGpa != null ? r.target_pct * tgtGpa : null, _tgt_gpa: tgtGpa };
-    });
-    const ratio = (a, b) => (a != null && b) ? a / b : null;
+    document.querySelectorAll('.tt-days').forEach((el) => { el.textContent = T.days ? `${iso(T.from)} – ${iso(T.to)}，${T.days} 日，全月 ${T.days_in_month} 日` : '未有本月數據'; });
+    document.querySelectorAll('.tt-tab').forEach((el) => { el.textContent = DATA.tm_tab || ''; });
+    document.querySelectorAll('.tt-gpa').forEach((el) => { el.textContent = !T.gpa_days ? '（Raw 未有本月數據，Actual % 同 Projected % 暫時空白）' : (T.gpa_days < T.days ? `（Raw 只計到 ${iso(T.gpa_to)}，GPA 按 ${T.gpa_days} 日平均推到 ${T.days} 日）` : `（同 TM cost 一樣計到 ${iso(T.gpa_to)}）`); });
+    const shops = T.shops.filter((r) => passTier(r.shop_code)).map((r) => ({ ...r, _tgt_tm: r.target_tm, _tgt_gpa: r.target_tm != null && r.target_pct ? r.target_tm / r.target_pct : null }));
+    const ratio = (a, b) => (a != null && b) ? a / b : null; // b = 0 (no GPA yet) -> blank
     const agg = (rows, extra) => {
       const s = (k) => rows.some((r) => r[k] != null) ? d3.sum(rows, (r) => r[k] || 0) : null;
       const tg = d3.sum(rows, (r) => r._tgt_gpa || 0), tt = d3.sum(rows, (r) => r._tgt_tm || 0);
@@ -975,7 +974,7 @@
       { key: 'tm', label: 'TM cost (MTD)', fmt: fmtN }, { key: 'gpa', label: 'GPA (MTD)', fmt: fmtN },
       { key: '_tgt_tm', label: 'Target TM cost', fmt: fmtN },
       { key: 'proj_tm', label: 'Projected TM cost', fmt: fmtN },
-      { key: 'd_tm', label: 'Projected vs target TM cost', fmt: sgn, tone: over, get: (r) => r.proj_tm == null || r._tgt_tm == null ? null : r.proj_tm - r._tgt_tm },
+      { key: 'd_tm', label: 'DEF (target − projection)', fmt: sgn, tone: (v) => v == null ? '' : (v < 0 ? 'neg' : 'pos'), get: (r) => r.proj_tm == null || r._tgt_tm == null ? null : r._tgt_tm - r.proj_tm },
     ];
     drawTable($('tt-dm-table'), groupBy('dm').concat([{ ...total, dm: 'Total' }]), cols([{ key: 'dm', label: 'DM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }]));
     drawTable($('tt-am-table'), groupBy('am').concat([{ ...total, am: 'Total' }]), cols([{ key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }]));

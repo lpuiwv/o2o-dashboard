@@ -262,6 +262,32 @@ def fetch_pos(get):
 MD_COLS = ["shop_code", "shop_name", "gmv", "net_sale", "md", "promo", "md_rate", "qty"]
 
 
+DISP_COLS = ["shop_code", "shop_name", "sku_gmv", "disp_qty", "dmg_qty", "miss_qty", "st_short_qty", "st_extra_qty",
+             "disp_cost", "dmg_cost", "miss_cost", "st_cost", "total", "rate"]
+DISP_TYPE_COLS = ["pos_type", "gmv", "qty", "disp_qty", "dmg_qty", "disp_cost", "dmg_cost", "total", "rate"]
+
+
+def fetch_disposal(get):
+    """Disposal by shop and by POS type, copied from Tableau ('Shop View (Disposal)' / 'Disposal') into the POS sheet
+    by the daily scheduled task (Vivian, 2/11/2026). Optional."""
+    try:
+        shops, _ = parse_pos(get(POS_SHEET, "'Disposal'!A1:N200"), DISP_COLS, {"shop_code", "shop_name"})
+        try:
+            types, _ = parse_pos(get(POS_SHEET, "'Disposal by type'!A1:I40"), DISP_TYPE_COLS, {"pos_type"})
+        except Exception:
+            types = []
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B16") if r}
+        shops = [x for x in shops if x.get("shop_code") and x["shop_code"] != "All"]
+        if not shops:
+            return None
+        return {"shops": shops, "types": [t for t in types if t.get("pos_type") and t["pos_type"] != "All"],
+                "period": info.get("Disposal period", ""), "exported_at": info.get("Disposal exported at", ""),
+                "tableau_updated": info.get("Disposal Tableau last update", "")}
+    except Exception as e:
+        print(f"Disposal tab not read: {e}", file=sys.stderr)
+        return None
+
+
 def fetch_md(get):
     """Manual Discount by shop, copied from Tableau into the POS sheet's 'Manual Discount' tab (optional)."""
     try:
@@ -622,6 +648,7 @@ def fetch_all():
         "dm_ex": dm_ex, "am_ex": am_ex,
         "pos": fetch_pos(get),
         "md": fetch_md(get),
+        "disposal": fetch_disposal(get),
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),

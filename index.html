@@ -126,6 +126,7 @@
     <button role="tab" id="tab-tm" data-tab="tm" aria-selected="false">TM cost</button>
     <button role="tab" id="tab-pos" data-tab="pos" aria-selected="false">POS achievement</button>
     <button role="tab" id="tab-discount" data-tab="discount" aria-selected="false">Manual Discount</button>
+    <button role="tab" id="tab-disposal" data-tab="disposal" aria-selected="false">Disposal</button>
     <span class="tierbox" id="tier-bar"><label class="note" for="tier-filter">Shop tier 篩選</label>
     <select id="tier-filter" aria-label="Filter by shop tier"><option value="">All tiers</option></select></span>
   </nav>
@@ -257,6 +258,28 @@
       </div>
     </div>
   </section>
+
+  <!-- Disposal (Tableau "Shop View (Disposal)" + "Disposal" by POS type; Vivian, 2/11/2026) -->
+  <section class="pane" id="disposal" role="tabpanel" aria-labelledby="tab-disposal" hidden>
+    <div class="stamp" id="stamp-disp"></div>
+    <div class="wait" id="disp-missing" hidden>
+      <h2>Disposal</h2>
+      <p>未有 Disposal 數據。每日上午約 9:52 會由 Tableau 抄去 O2O POS Target (Tableau) Google Sheet 嘅「Disposal」tab，之後 dashboard 更新就會見到。</p>
+    </div>
+    <div class="sec" id="disp-body">
+      <p class="note" id="disp-note"></p>
+      <div class="tiles" id="disp-kpis"></div>
+      <div class="grid">
+        <div class="card"><h3>Disposal by DM</h3><p class="note">Disposal rate = Total Disposal ÷ Related SKU GMV，同 Tableau 計法一樣。合計用 Σ 計。</p><div class="scroll"><table id="disp-dm-table"></table></div></div>
+        <div class="card"><h3>Disposal by AM</h3><p class="note">按 AM 加埋佢管嘅舖。</p><div class="scroll"><table id="disp-am-table"></table></div></div>
+        <div class="card"><h3>Disposal by shop</h3><p class="note">Total Disposal 係 Tableau 嘅數（已計 stocktake 多出嘅存貨），所以唔一定等於幾項 cost 相加。Disposal rate 高過整體 1.5 倍會標紅。</p>
+          <div class="ctrl"><select id="disp-am-filter" aria-label="Filter by AM"></select><input id="disp-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
+          <div class="scroll"><table id="disp-table"></table></div></div>
+        <div class="card"><h3>Disposal rate by shop</h3><p class="note">由高至低排，用同上面個表一樣嘅篩選。虛線 = 整體 disposal rate。</p><div class="chart" id="disp-chart"></div></div>
+        <div class="card"><h3>Disposal by POS type</h3><p class="note">Tableau「Disposal」頁，全部舖合計，唔跟 Shop tier 篩選。Total = Disposal cost + Damage cost。</p><div class="scroll"><table id="disp-type-table"></table></div></div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -268,7 +291,7 @@
   // Outlet shops and EPR, matching the sheet's 'Excl. Outlet & EPR' summary (SWH and CHE are outlets)
   const EXCLUDED = ['SWH', 'CHE', 'EPR'];
   const sortState = {};
-  const TABS = ['dop', 'tm', 'pos', 'discount'];
+  const TABS = ['dop', 'tm', 'pos', 'discount', 'disposal'];
 
   async function decrypt(pkg, password) {
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -811,6 +834,66 @@
     drawRate($('md-chart'), rows, T.md_rate);
   }
 
+
+  // Disposal tab (Vivian, 2/11/2026)
+  const dpAm = $('disp-am-filter'), dpSearch = $('disp-search');
+  dpAm.addEventListener('change', () => draw()); dpSearch.addEventListener('input', () => draw());
+  function drawDisposal() {
+    const D = DATA.disposal;
+    $('disp-missing').hidden = !!D; $('disp-body').hidden = !D;
+    if (!D) return;
+    const team = new Map();
+    (DATA.shops || []).forEach((r) => team.set(r.shop_code, { dm: r.dm, am: r.am }));
+    ((DATA.pos || {}).shops || []).forEach((r) => team.set(r.shop_code, { dm: r.dm, am: r.am }));
+    const rate = (o) => o.sku_gmv ? (o.total || 0) / o.sku_gmv : null;
+    const all = D.shops.map((r) => { const t = team.get(r.shop_code) || {}; return { ...r, dm: t.dm || '—', am: t.am || '—', rate: r.rate ?? rate(r) }; });
+    const inTier = all.filter((r) => passTier(r.shop_code));
+    const KEYS = ['sku_gmv', 'disp_qty', 'dmg_qty', 'miss_qty', 'st_short_qty', 'st_extra_qty', 'disp_cost', 'dmg_cost', 'miss_cost', 'st_cost', 'total'];
+    const sum = (rows) => { const o = { shops: rows.length }; KEYS.forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); }); o.rate = rate(o); o.per_shop = rows.length ? o.total / rows.length : null; return o; };
+    const T = sum(inTier);
+    const noTeam = all.filter((r) => r.am === '—').map((r) => r.shop_code);
+    $('disp-note').textContent = `來自 Tableau（O2O Report › Disposal › Shop View (Disposal)），${D.period}。包括全部舖（連 outlet 同 EPR）。` + (noTeam.length ? ` ${noTeam.join('、')} 喺 POS / DOP Sheet 搵唔到 AM，所以 AM / DM 表顯示「—」。` : '');
+    tiles($('disp-kpis'), [
+      ['Total Disposal', fmtK(T.total), { hint: `${T.shops} 間舖` }], ['Disposal rate', fmtP(T.rate), { hint: 'Total ÷ Related SKU GMV' }],
+      ['Disposal cost', fmtK(T.disp_cost), { hint: `${fmtN(T.disp_qty)} 件` }], ['Damage cost', fmtK(T.dmg_cost), { hint: `${fmtN(T.dmg_qty)} 件` }],
+      ['Missing cost', fmtK(T.miss_cost), { hint: `${fmtN(T.miss_qty)} 件` }], ['Avg disposal per shop', fmtK(T.per_shop)],
+    ]);
+    const group = (key) => {
+      const g = d3.rollups(inTier, (v) => sum(v), (r) => r[key]).map(([name, o]) => ({ [key]: name, ...o })).sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+      return g.concat(g.length ? [{ [key]: 'Total', _pin: true, _cls: 'tot', ...T }] : []);
+    };
+    const rateTone = (v) => v == null || !T.rate ? '' : (v > T.rate * 1.5 ? 'neg' : '');
+    const money = [{ key: 'total', label: 'Total Disposal', fmt: fmtN }];
+    const tail = [{ key: 'disp_cost', label: 'Disposal cost', fmt: fmtN }, { key: 'dmg_cost', label: 'Damage cost', fmt: fmtN }, { key: 'miss_cost', label: 'Missing cost', fmt: fmtN },
+      { key: 'st_cost', label: 'Stocktake cost', fmt: fmtN }, { key: 'sku_gmv', label: 'Related SKU GMV', fmt: fmtN },
+      { key: 'disp_qty', label: 'Disposal qty', fmt: fmtN }, { key: 'dmg_qty', label: 'Damage qty', fmt: fmtN }, { key: 'miss_qty', label: 'Missing qty', fmt: fmtN },
+      { key: 'st_short_qty', label: 'Stocktake short qty', fmt: fmtN }, { key: 'st_extra_qty', label: 'Stocktake extra qty', fmt: fmtN }];
+    const gCols = (key, label, rows) => [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, ...money,
+      { key: 'rate', label: 'Disposal rate', fmt: fmtP, tone: rateTone, bar: { max: d3.max(rows.filter((r) => !r._pin), (r) => r.rate || 0) } },
+      { key: 'per_shop', label: 'Avg per shop', fmt: fmtN }, ...tail];
+    const dm = group('dm'), am = group('am');
+    drawTable($('disp-dm-table'), dm, gCols('dm', 'DM', dm));
+    drawTable($('disp-am-table'), am, gCols('am', 'AM', am));
+    const picked = dpAm.value; const ams = [...new Set(all.map((r) => r.am))].sort();
+    if (dpAm.options.length !== ams.length + 1) { dpAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); dpAm.value = picked; }
+    const q = dpSearch.value.trim().toLowerCase();
+    const rows = inTier.filter((r) => (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
+    const tot = { shop_code: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', ...sum(rows) };
+    drawTable($('disp-table'), rows.concat(rows.length ? [tot] : []), [
+      { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+      { key: 'am', label: 'AM', cls: 'l', get: (r) => r._pin ? '' : r.am }, ...money,
+      { key: 'rate', label: 'Disposal rate', fmt: fmtP, tone: rateTone, bar: { max: d3.max(rows, (r) => r.rate || 0) } }, ...tail]);
+    // reuse the MD rate chart: it reads md_rate (bar) and md (tooltip amount)
+    drawRate($('disp-chart'), rows.map((r) => ({ ...r, md_rate: r.rate, md: r.total })), T.rate);
+    const types = (D.types || []).slice().sort((a, b) => (b.total || 0) - (a.total || 0));
+    const tt = { pos_type: 'Total', _pin: true, _cls: 'tot' };
+    ['gmv', 'qty', 'disp_qty', 'dmg_qty', 'disp_cost', 'dmg_cost', 'total'].forEach((k) => { tt[k] = d3.sum(types, (r) => r[k] || 0); });
+    drawTable($('disp-type-table'), types.concat(types.length ? [tt] : []), [
+      { key: 'pos_type', label: 'POS type', cls: 'l', freeze: true }, { key: 'total', label: 'Total (disposal + damage)', fmt: fmtN },
+      { key: 'rate', label: 'Disposal rate', fmt: fmtP }, { key: 'disp_cost', label: 'Disposal cost', fmt: fmtN }, { key: 'dmg_cost', label: 'Damage cost', fmt: fmtN },
+      { key: 'gmv', label: 'GMV', fmt: fmtN }, { key: 'qty', label: 'Qty sold', fmt: fmtN }, { key: 'disp_qty', label: 'Disposal qty', fmt: fmtN }, { key: 'dmg_qty', label: 'Damage qty', fmt: fmtN }]);
+  }
+
   // Line of the projected month TM cost, one point per day it was recorded
   function drawProjLine(el, days) {
     el.replaceChildren();
@@ -1007,6 +1090,8 @@
     stamp('stamp-tm', [[L.src + '（Google Sheet）', '每日上午 9:45'], [L.per, period(lastDay)], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
     const P = DATA.pos || {}, M = DATA.md || {};
     stamp('stamp-pos', [[L.src + '（Tableau）', '每日上午約 9:00' + (P.tableau_updated ? `（今次：${P.tableau_updated}）` : '')], [L.per, P.period], [L.imp, P.exported_at], [L.upd, DATA.generated_at]]);
+    const DP = DATA.disposal || {};
+    stamp('stamp-disp', [[L.src + '（Tableau）', '每日上午約 9:00' + (DP.tableau_updated ? `（今次：${DP.tableau_updated}）` : '')], [L.per, DP.period], [L.imp, DP.exported_at], [L.upd, DATA.generated_at]]);
     stamp('stamp-md', [[L.src + '（Tableau）', '每日上午約 9:00' + (M.tableau_updated ? `（今次：${M.tableau_updated}）` : '')], [L.per, M.period], [L.imp, M.exported_at], [L.upd, DATA.generated_at]]);
   }
 
@@ -1022,6 +1107,7 @@
     if (current === 'tm') { drawTm(); drawTmTarget(); }
     if (current === 'pos') drawPos();
     if (current === 'discount') drawMd();
+    if (current === 'disposal') drawDisposal();
   }
   let rT; window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(draw, 150); });
 })();

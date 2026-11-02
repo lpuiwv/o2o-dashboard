@@ -275,7 +275,6 @@
         <div class="card"><h3>Disposal by shop</h3><p class="note">Total Disposal 係 Tableau 嘅數（已計 stocktake 多出嘅存貨），所以唔一定等於幾項 cost 相加。Disposal rate 高過整體 1.5 倍會標紅。</p>
           <div class="ctrl"><select id="disp-am-filter" aria-label="Filter by AM"></select><input id="disp-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="disp-table"></table></div></div>
-        <div class="card"><h3>Disposal rate by shop</h3><p class="note">由高至低排，用同上面個表一樣嘅篩選。虛線 = 整體 disposal rate。</p><div class="chart" id="disp-chart"></div></div>
         <div class="card"><h3>Disposal by POS type</h3><p class="note">Tableau「Disposal」頁，全部舖合計，唔跟 Shop tier 篩選。Total = Disposal cost + Damage cost。</p><div class="scroll"><table id="disp-type-table"></table></div></div>
       </div>
     </div>
@@ -883,8 +882,7 @@
       { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
       { key: 'am', label: 'AM', cls: 'l', get: (r) => r._pin ? '' : r.am }, ...money,
       { key: 'rate', label: 'Disposal rate', fmt: fmtP, tone: rateTone, bar: { max: d3.max(rows, (r) => r.rate || 0) } }, ...tail]);
-    // reuse the MD rate chart: it reads md_rate (bar) and md (tooltip amount)
-    drawRate($('disp-chart'), rows.map((r) => ({ ...r, md_rate: r.rate, md: r.total })), T.rate);
+    // "Disposal rate by shop" chart removed (Vivian, 2/11/2026)
     const types = (D.types || []).slice().sort((a, b) => (b.total || 0) - (a.total || 0));
     const tt = { pos_type: 'Total', _pin: true, _cls: 'tot' };
     ['gmv', 'qty', 'disp_qty', 'dmg_qty', 'disp_cost', 'dmg_cost', 'total'].forEach((k) => { tt[k] = d3.sum(types, (r) => r[k] || 0); });

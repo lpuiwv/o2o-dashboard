@@ -530,11 +530,11 @@ def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None, tm_to=None):
 def tabs_for(d):
     mon = d.strftime("%b %Y")  # e.g. "Oct 2026"
     return {
-        "dm": (DOP_SHEET, f"'Summary - {mon}'!A1:O5"),
-        "am": (DOP_SHEET, f"'Summary - {mon}'!A8:O15"),
-        "dm_ex": (DOP_SHEET, f"'Summary - {mon}'!A18:O22"),
-        "am_ex": (DOP_SHEET, f"'Summary - {mon}'!A25:O32"),
-        "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:L150"),
+        "dm": (DOP_SHEET, f"'Summary - {mon}'!A1:T5"),
+        "am": (DOP_SHEET, f"'Summary - {mon}'!A8:T15"),
+        "dm_ex": (DOP_SHEET, f"'Summary - {mon}'!A18:T22"),
+        "am_ex": (DOP_SHEET, f"'Summary - {mon}'!A25:T32"),
+        "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:T150"),
         "dop_target": (DOP_SHEET, f"'{d:%b} Target'!A1:H40"),
         "commission": (DOP_SHEET, f"'{d:%b} Target %'!A1:K20"),
         "tm_daily_head": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A1"),

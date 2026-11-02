@@ -7,6 +7,7 @@ Optional:
   MOCK_VALUES     - path to a JSON file of {range: values} used instead of Google (for local testing)
 """
 import base64
+import calendar
 import re
 import datetime as dt
 import json
@@ -23,6 +24,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 DOP_SHEET = "1AiI-an7F-dtpZ_BoTnrQY65Kokha8c3csloRSrSueuQ"  # Daily Shop PNL (DOP bot)
 TM_SHEET = "1AnaHxF1yKUWAAVqy77PkYb4fWdVxcSdZ1bwdByHmNJk"   # All Shop Daily TM Cost
 TIER_SHEET = "1YFEdwrN9E8LQlB63hWZU6kWg_99wUjmxP_kUsKmZQvg"  # Tier of shop (by target): Code / Shop Name / Tier
+TARGET_SHEET = "1NjGFRTCmTU_0-9vvoIXFYVSVocJ4_0Fyhjbe-8qWNA8"  # O2O Shop Target 2026 Final_For PED OPS: "<Mon> TM cost target" (Vivian, 2/11/2026)
 POS_SHEET = "1AZBZXU_dbRvTdUaE-J0WVcM62ZFkMTMOhsARdSNiyec"  # O2O POS Target (Tableau) - copy of Tableau crosstabs
 ITERATIONS = 250_000
 ROOT = Path(__file__).resolve().parent
@@ -48,17 +50,39 @@ TEAM_KEYS = ["pos_gmv", "pos_gpa", "gp_pct", "pickup_gpa", "tm_cost", "office_co
              "rental_cost", "operating_cost", "wh_log_cost", "capex", "mkt_cost", "dop", "proj_dop"]
 
 
+# Summary header -> key (Vivian's sheet added columns over time, e.g. "TM Cost (Frontline) (Matthew Chu)" in Oct,
+# "TM Full Month (Plan)" in Nov), so columns are matched by header name, not position.
+def team_key(h):
+    h = str(h).split("\n")[0].strip().lower()
+    if h == "tm cost (frontline)":
+        return "tm_cost"
+    if h.startswith("tm full month") or "matthew" in h or h.startswith("tm cost (frontline) ("):
+        return "tm_plan"
+    for pre, k in (("pos gmv", "pos_gmv"), ("pos gpa", "pos_gpa"), ("gp%", "gp_pct"), ("pickup gpa", "pickup_gpa"),
+                   ("office cost", "office_cost"), ("disposal cost", "disposal_cost"), ("rental cost", "rental_cost"),
+                   ("operating cost", "operating_cost"), ("wh & log", "wh_log_cost"), ("capex", "capex"),
+                   ("mkt cost", "mkt_cost"), ("proj. dop", "proj_dop"), ("dop", "dop")):
+        if h.startswith(pre):
+            return k
+    return None
+
+
 def parse_team(values, name_key):
+    head = values[0] if values else []
+    cols = {team_key(h): i for i, h in enumerate(head) if i and team_key(h)}
+    if not {"pos_gmv", "tm_cost", "dop"} <= set(cols):  # no usable header: old fixed layout
+        cols = {k: i + 1 for i, k in enumerate(TEAM_KEYS)}
     as_of = values[1][1] if len(values) > 1 and len(values[1]) > 1 else ""
     date_row = values[1] if len(values) > 1 else []
-    dates = {k: (date_row[i + 1] if i + 1 < len(date_row) else "") for i, k in enumerate(TEAM_KEYS)}
+    dates = {k: (date_row[i] if i < len(date_row) else "") for k, i in cols.items()}
     rows = []
     for r in values[2:]:
         if not r or not str(r[0]).strip():
             continue
         row = {name_key: r[0]}
-        for i, k in enumerate(TEAM_KEYS):
-            row[k] = num(r[i + 1]) if i + 1 < len(r) else None
+        for k in TEAM_KEYS + ["tm_plan"]:
+            i = cols.get(k)
+            row[k] = num(r[i]) if i is not None and i < len(r) else None
         rows.append(row)
     return rows, as_of, dates
 
@@ -67,15 +91,34 @@ SHOP_COLS = ["shop_code", "shop_name", "am", "dm", "pos_gpa", "pos_gp_pct", "pic
              "disposal_cost", "other_mkt_cost", "dop", "proj_dop"]
 
 
+def shop_key(h):
+    h = str(h).split("\n")[0].strip().lower()
+    for pre, k in (("shop code", "shop_code"), ("shop name", "shop_name"), ("am", "am"), ("dm", "dm"), ("pos gpa", "pos_gpa"),
+                   ("pos gp%", "pos_gp_pct"), ("pickup gpa", "pickup_gpa"), ("planned", "tm_plan"), ("frontline tm", "tm_cost"),
+                   ("tm cost", "tm_cost"), ("disposal", "disposal_cost"), ("other", "other_mkt_cost"), ("proj. dop", "proj_dop"),
+                   ("dop", "dop")):
+        if h == pre or (len(pre) > 3 and h.startswith(pre)):
+            return k
+    return None
+
+
 def parse_shops(values):
+    head = values[0] if values else []
+    cols = {}
+    for i, h in enumerate(head):
+        k = shop_key(h)
+        if k and k not in cols:
+            cols[k] = i
+    if not {"shop_code", "am", "dop"} <= set(cols):  # old fixed layout
+        cols = {k: i for i, k in enumerate(SHOP_COLS)}
     rows = []
     for r in values[1:]:
-        if len(r) < 3 or not r[0] or not r[2]:  # skip TOTAL / note lines (no AM)
+        g = lambda k: r[cols[k]] if k in cols and cols[k] < len(r) else ""
+        if not g("shop_code") or not g("am"):  # skip TOTAL / note lines (no AM)
             continue
-        r = r + [""] * (12 - len(r))
-        row = {"shop_code": r[0], "shop_name": r[1], "am": r[2], "dm": r[3]}
-        for i, k in enumerate(SHOP_COLS[4:], start=4):
-            row[k] = num(r[i])
+        row = {"shop_code": g("shop_code"), "shop_name": g("shop_name"), "am": g("am"), "dm": g("dm")}
+        for k in SHOP_COLS[4:] + ["tm_plan"]:
+            row[k] = num(g(k))
         rows.append(row)
     return rows
 
@@ -345,6 +388,90 @@ def fetch_tiers(get):
         return {}
 
 
+def parse_tm_target(values):
+    """'<Mon> TM cost target': header row with DM, AM, UM, Code, Shop Name, "Target TM Cost/POS GMV (6.9%…" (a %).
+    The % is TM cost ÷ (POS GPA + Pickup GPA, i.e. pickup GMV × 6.9%). Returns {code: {dm, am, um, name, pct}}."""
+    out, cols = {}, None
+    for r in values:
+        cells = [str(c).split("\n")[0].strip() for c in r]
+        if cols is None:
+            if "Code" in cells:
+                low = [c.lower() for c in cells]
+                pct = next((i for i, c in enumerate(low) if c.startswith("target tm cost")), None)
+                cols = {"dm": cells.index("DM") if "DM" in cells else 0, "am": cells.index("AM") if "AM" in cells else 1,
+                        "um": cells.index("UM") if "UM" in cells else None, "code": cells.index("Code"),
+                        "name": cells.index("Shop Name") if "Shop Name" in cells else cells.index("Code") + 1, "pct": pct}
+            continue
+        g = lambda k: cells[cols[k]] if cols.get(k) is not None and cols[k] < len(cells) else ""
+        if not g("code"):
+            if out:
+                break
+            continue
+        p = num(g("pct"))
+        if p is None:
+            continue
+        out[g("code")] = {"dm": g("dm"), "am": g("am"), "um": g("um").replace("\t", "").strip(), "name": g("name"), "pct": p}
+    return out
+
+
+def parse_shop_gpa_target(values):
+    """'<Mon>' tab of the target sheet: Code, "<Mon> Pick up Shop version" (pickup GMV target), "GPA" (POS GPA target).
+    Returns {code: POS GPA target + pickup GMV target × 6.9%}."""
+    if not values:
+        return {}
+    head = [str(h).replace("\n", " ").strip().lower() for h in values[0]]
+    try:
+        ci, gi = head.index("code"), head.index("gpa")
+    except ValueError:
+        return {}
+    pi = next((i for i, h in enumerate(head) if "pick up" in h and "shop" in h), None)
+    out = {}
+    for r in values[1:]:
+        if len(r) <= ci or not str(r[ci]).strip():
+            continue
+        gpa = num(r[gi]) if gi < len(r) else None
+        if gpa is None:  # no GPA target (e.g. outlets) -> skip
+            continue
+        pk = num(r[pi]) if pi is not None and pi < len(r) else None
+        out[str(r[ci]).strip()] = gpa + (pk or 0) * 0.069
+    return out
+
+
+def parse_raw_gpa(values):
+    """DOP bot 'Raw - <Mon YYYY>': per shop per day -> {date: {shop: [tm_cost, pos_gpa + pickup_gpa]}} (cols K, H, E)."""
+    out = {}
+    for r in values:
+        if len(r) < 11 or not str(r[0]).strip() or not str(r[1]).strip():
+            continue
+        tm, gpa, pk = num(r[10]), num(r[7]), num(r[4])
+        out.setdefault(str(r[0]).strip(), {})[str(r[1]).strip()] = [tm or 0, (gpa or 0) + (pk or 0), tm is not None]
+    return dict(sorted(out.items()))
+
+
+def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None):
+    """Per shop: target %, actual % = Σ TM cost ÷ Σ (POS GPA + Pickup GPA) over the days that have TM cost,
+    projected % = projected full-month TM cost (TM cost sheet) ÷ projected GPA (month-to-date run rate)."""
+    if not target:
+        return None
+    days = parse_raw_gpa(raw_rows)
+    tm_days = [k for k, v in days.items() if any(x[2] and x[0] for x in v.values())]
+    last = max(tm_days) if tm_days else None
+    use = [k for k in days if last and k <= last]
+    dim = calendar.monthrange(d.year, d.month)[1]
+    proj_tm = {r["shop"]: r["roster_total_cost"] for r in tm_rows}
+    shops = []
+    for code, t in target.items():
+        tm = sum(days[k].get(code, [0, 0])[0] for k in use)
+        gpa = sum(days[k].get(code, [0, 0])[1] for k in use)
+        n = len(use)
+        pgpa = gpa / n * dim if n else None
+        shops.append({"shop_code": code, "shop_name": t["name"], "dm": t["dm"], "am": t["am"], "um": t["um"],
+                      "target_pct": t["pct"], "tm": round(tm, 2), "gpa": round(gpa, 2),
+                      "proj_tm": proj_tm.get(code), "proj_gpa": round(pgpa, 2) if pgpa is not None else None,
+                      "target_gpa": round((gpa_target or {}).get(code), 2) if (gpa_target or {}).get(code) is not None else None})
+    return {"shops": shops, "days": len(use), "from": use[0] if use else "", "to": last or "", "days_in_month": dim}
+
+
 # ---------- fetching ----------
 def tabs_for(d):
     mon = d.strftime("%b %Y")  # e.g. "Oct 2026"
@@ -359,6 +486,8 @@ def tabs_for(d):
         "tm_daily_head": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A1"),
         "tm_daily": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A2:ZZ4"),
         "raw": (DOP_SHEET, f"'Raw - {mon}'!A2:K4000"),
+        "tm_target": (TARGET_SHEET, f"'{d:%b} TM cost target'!A1:Y200"),
+        "gpa_target": (TARGET_SHEET, f"'{d:%b}'!A1:I200"),
         "_month": d.strftime("%B %Y"),
     }
 
@@ -389,7 +518,7 @@ def make_getter():
 
 def fetch_month(get, d):
     t = tabs_for(d)
-    optional = ("dop_target", "tm_daily", "raw", "commission", "tm_daily_head")
+    optional = ("dop_target", "tm_daily", "raw", "commission", "tm_daily_head", "tm_target", "gpa_target")
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
     for k in optional:
         try:
@@ -471,6 +600,8 @@ def fetch_all():
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
+        "tm_target": tm_vs_target(parse_tm_target(raw.get("tm_target") or []), raw.get("raw") or [], tm, raw["_date"],
+                                  parse_shop_gpa_target(raw.get("gpa_target") or [])),
         "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio, "tm_excl_dmam": excl_dmam,
         "_tm_month": f"{raw['_date']:%Y%m}",
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),

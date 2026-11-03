@@ -183,8 +183,8 @@
     <div class="callout plain"><b>成本點計</b>每項成本 = basic + non-basic，再加：DM、AM、UM、SS、ASS、SA 加 15% overhead · PT 加 7%（468PT 每人另加 $1,000）· 偏遠店 SA–UM 有 $1,000 交通津貼。OT 每小時 $60，外判每小時 $65。<b id="tm-dmam-note" class="tm-dmam" hidden></b></div>
     <div class="tiles" id="tm-kpis"></div>
     <div class="grid">
-      <div class="card"><h3>Where the TM cost goes — Actual</h3><p class="note">全部舖月初至今嘅實際 TM cost 按組別分，HK$。圓心係 PT 佔幾多 %。<span class="tm-src"></span></p><div class="pie" id="mix"></div></div>
-      <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。PT 用 roster 全月時數計；<span class="tm-proj-note"></span></p><div class="pie" id="mix-proj"></div></div>
+      <div class="card"><h3>Where the TM cost goes — Actual</h3><p class="note">全部舖月初至今嘅實際 TM cost 按組別分，HK$。圓心係 PT + 外判（OS）佔幾多 %。<span class="tm-src"></span></p><div class="pie" id="mix"></div></div>
+      <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。圓心係 PT + 外判（OS）佔幾多 %。PT 用 roster 全月時數計；<span class="tm-proj-note"></span></p><div class="pie" id="mix-proj"></div></div>
       <div class="card" id="tt-card" hidden>
         <h3>TM cost vs target</h3>
         <p class="note">TM cost 全部來自 TM cost sheet「<span class="tt-tab"></span>」（已剔除 DM、AM）：TM cost (MTD) = 實數小計（<span class="tt-days"></span>），Projected TM cost = Projection 合計，Target TM cost = 「<span class="tt-mon"></span> TM Cost (excl. DMAM)」，DEF = target − projection（負數 = 超咗 target，紅色）。Target % 來自「O2O Shop Target 2026」sheet 嘅「<span class="tt-mon"></span> TM cost target」：TM cost ÷（POS GPA + Pickup GPA）嘅目標（Pickup GPA = pickup GMV × 6.9%）。GPA 用 DOP sheet「Raw」每日數<span class="tt-gpa"></span>；預計 GPA = 月初至今 GPA ÷ 已有日數 × 全月日數。DM / AM 合計 % = Σ TM cost ÷ Σ GPA；合計 Target % = Σ Target TM cost ÷ Σ（Target TM cost ÷ 該舖 target %）。跟 Shop tier 篩選。</p>
@@ -592,7 +592,7 @@
   // Group labels: from Nov 2026 the source puts UM with SS/ASS instead of with DM/AM
   const lblMgmt = () => DATA.tm_um_split ? 'DM + AM' : 'DM + AM + UM';
   const lblSs = () => DATA.tm_um_split ? 'UM + SS + ASS' : 'SS + ASS';
-  // Pie (donut) of cost groups; PT highlighted and its share written in the middle
+  // Pie (donut) of cost groups; PT and outsource highlighted and their combined share written in the middle (Vivian, 3/11/2026)
   const PIE_COLORS = { mgmt: '#9aa7b8', ss: '#7f9cc4', sa: '#b7c9e3', pt: null, os: '#d9a86c', ot: '#c79ac9', tr: '#a3b98a' };
   function drawPie(el, tm, fn = grp) {
     const G = tm.map(fn); const s = (k) => d3.sum(G, (g) => g[k]);
@@ -606,15 +606,15 @@
     const R = Math.min(130, Math.max(90, (el.clientWidth || 300) / 4)), r0 = R * 0.58, size = R * 2 + 8;
     const svg = d3.select(el).append('svg').attr('width', size).attr('height', size).attr('viewBox', `${-size / 2} ${-size / 2} ${size} ${size}`).style('font-family', 'var(--sans)');
     const arcs = d3.pie().sort(null).value((d) => d.v)(items.filter((d) => d.v > 0));
-    svg.selectAll('path').data(arcs).join('path').attr('d', (a) => d3.arc().innerRadius(r0).outerRadius(a.data.k === 'pt' ? R + 4 : R).padAngle(0.008)(a))
+    svg.selectAll('path').data(arcs).join('path').attr('d', (a) => d3.arc().innerRadius(r0).outerRadius(a.data.k === 'pt' || a.data.k === 'os' ? R + 4 : R).padAngle(0.008)(a))
       .style('fill', (a) => a.data.color).style('stroke', 'var(--bg)').style('stroke-width', 1)
       .append('title').text((a) => `${a.data.name}: ${fmtN(a.data.v)}（${d3.format('.1%')(a.data.v / total)}）`);
-    const pt = items.find((d) => d.k === 'pt');
-    svg.append('text').attr('text-anchor', 'middle').attr('dy', '-0.1em').attr('font-size', R * 0.32).attr('font-weight', 700).style('fill', 'var(--fg)').text(d3.format('.1%')(pt.v / total));
-    svg.append('text').attr('text-anchor', 'middle').attr('dy', '1.5em').attr('font-size', 12).style('fill', 'var(--muted)').text('PT share');
+    const ptOs = d3.sum(items.filter((d) => d.k === 'pt' || d.k === 'os'), (d) => d.v);
+    svg.append('text').attr('text-anchor', 'middle').attr('dy', '-0.1em').attr('font-size', R * 0.32).attr('font-weight', 700).style('fill', 'var(--fg)').text(d3.format('.1%')(ptOs / total));
+    svg.append('text').attr('text-anchor', 'middle').attr('dy', '1.5em').attr('font-size', 12).style('fill', 'var(--muted)').text('PT + OS share');
     const lg = document.createElement('div'); lg.className = 'lg';
     items.forEach((d) => {
-      const it = document.createElement('div'); it.className = 'it' + (d.k === 'pt' ? ' pt' : '');
+      const it = document.createElement('div'); it.className = 'it' + (d.k === 'pt' || d.k === 'os' ? ' pt' : '');
       const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = d.color;
       const a = document.createElement('span'); a.textContent = d.name;
       const b = document.createElement('span'); b.textContent = fmtN(d.v);

@@ -192,15 +192,23 @@
         <div class="scroll"><table id="tt-dm-table"></table></div>
         <h4 class="sub-h">By AM</h4>
         <div class="scroll"><table id="tt-am-table"></table></div>
+        <h4 class="sub-h">By tier（平均每間舖）</h4>
+        <p class="note">每個 tier 嘅平均每間舖 TM cost、target 同 DEF（合計 ÷ 舖數）；% 用 Σ TM cost ÷ Σ GPA 計。Tier 來自 Shop tier sheet，冇 tier 嘅舖歸「No tier」。</p>
+        <div class="scroll"><table id="tt-tier-table"></table></div>
         <h4 class="sub-h">By shop</h4>
         <div class="ctrl"><select id="tt-am-filter" aria-label="Filter by AM"></select><input id="tt-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tt-shop-table"></table></div>
       </div>
       <div class="card">
-        <h3>TM cost by shop</h3>
-        <p class="note">成本已包上面講嘅 overhead。Projected TM cost = 按 roster 計每間舖全月成本。</p>
+        <h3>TM cost by shop — Actual（月初至今）</h3>
+        <p class="note">呢個表全部係<b>實際</b>數（月初至今，<span class="tm-act-to"></span>）：人數、時數同成本都係實數，成本已包上面講嘅 overhead。全月預計數喺下一個表。AM 篩選同搜尋兩個表一齊用。</p>
         <div class="ctrl"><select id="tm-am-filter" aria-label="Filter by AM"></select><input id="tm-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table"></table></div>
+      </div>
+      <div class="card">
+        <h3>TM cost by shop — Projected（全月預計）</h3>
+        <p class="note">呢個表全部係<b>全月預計</b>數：固定成本按全月計，PT 用 roster 時數，外判用外判更表。有 target 嘅月份會顯示 Target TM cost 同 DEF（target − projection，負數 = 預計超 target，紅色）。用上面個表嘅 AM 篩選同搜尋。</p>
+        <div class="scroll"><table id="tm-table-p"></table></div>
       </div>
       <div class="card" id="tm-daily-card">
         <h3>Projected monthly TM cost — daily tracking</h3>
@@ -212,7 +220,7 @@
       </div>
       <div class="card">
         <h3>Staff cost distribution by shop</h3>
-        <p class="note">每組佔該舖目前 TM cost 嘅 %，四項加埋 = 100%。</p>
+        <p class="note">每組佔該舖 TM cost 嘅 %：左邊係月初至今（MTD）實數，右邊係全月預計（Projected），每邊幾項加埋 = 100%。用 TM cost by shop 嘅 AM 篩選同搜尋。</p>
         <div class="scroll"><table id="dist-table"></table></div>
       </div>
     </div>
@@ -1001,29 +1009,51 @@
     if (tmAm.options.length !== tmAms.length + 1) { tmAm.replaceChildren(new Option('All AMs', ''), ...tmAms.map((a) => new Option(a, a))); tmAm.value = pickedAm; }
     const q = tmSearch.value.trim().toLowerCase();
     const rows = tm.filter((r) => (!tmAm.value || amOf.get(r.shop) === tmAm.value) && (!q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q))).map((r) => ({ ...r, _am: amOf.get(r.shop) }));
-    drawTable($('tm-table'), rows, [
-      { key: 'shop', label: 'Shop', freeze: true }, tierCol('shop'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: '_am', label: 'AM', cls: 'l' },
+    const sumG = (fn) => { const G = rows.map(fn); const k = (x) => d3.sum(G, (g) => g[x]); return mkG({ mgmt: k('mgmt'), ss: k('ss'), sa: k('sa'), pt: k('pt'), os: k('os'), ot: k('ot'), tr: k('tr') }); };
+    const sumK = (k, fn = (r) => r[k]) => d3.sum(rows, (r) => fn(r) || 0);
+    const pn = (r, k) => (r.proj_n && r.proj_n[k] != null) ? r.proj_n[k] : r[k];
+    const T = DATA.tm_target; const tgt = new Map(((T && T.shops) || []).map((x) => [x.shop_code, x]));
+    const head = [{ key: 'shop', label: 'Shop', freeze: true }, tierCol('shop'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: '_am', label: 'AM', cls: 'l', freeze: true }];
+    const costCols = (fn, sfx) => [
+      ...(DATA.tm_excl_dmam ? [] : [{ key: 'c_mgmt' + sfx, label: lblMgmt().replace(/ /g, '') + ' cost', fmt: fmtN, get: (r) => fn(r).mgmt }]),
+      { key: 'c_ss' + sfx, label: lblSs().replace(/ /g, '') + ' cost', fmt: fmtN, get: (r) => fn(r).ss },
+      { key: 'c_sa' + sfx, label: 'SA cost', fmt: fmtN, get: (r) => fn(r).sa },
+      { key: 'c_pt' + sfx, label: 'PT cost', fmt: fmtN, get: (r) => fn(r).pt },
+      { key: 'c_os' + sfx, label: 'OS cost', fmt: fmtN, get: (r) => fn(r).os },
+      { key: 'c_ot' + sfx, label: 'OT + transport', fmt: fmtN, get: (r) => fn(r).ot + fn(r).tr }];
+    // Actual (MTD)
+    const totA = { shop: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', _g: sumG(grp), ss_n: sumK('ss_n'), assp_n: sumK('assp_n'), sa_n: sumK('sa_n'), pt_hours: sumK('pt_hours'), os_hours: sumK('os_hours') };
+    drawTable($('tm-table'), rows.concat(rows.length ? [totA] : []), [...head,
       { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASS', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
-      { key: 'pt_hours', label: 'PT hrs', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs', fmt: fmtH },
-      ...(DATA.tm_excl_dmam ? [] : [{ key: 'c_mgmt', label: lblMgmt().replace(/ /g, '') + ' cost', fmt: fmtN, get: (r) => grp(r).mgmt }]),
-      { key: 'c_ss', label: lblSs().replace(/ /g, '') + ' cost', fmt: fmtN, get: (r) => grp(r).ss },
-      { key: 'c_sa', label: 'SA cost', fmt: fmtN, get: (r) => grp(r).sa },
-      { key: 'c_pt', label: 'PT cost', fmt: fmtN, get: (r) => grp(r).pt },
-      { key: 'c_os', label: 'OS cost', fmt: fmtN, get: (r) => grp(r).os },
-      { key: 'roster_total_cost', label: 'Projected TM cost', fmt: fmtN, bar: { max: d3.max(rows, (r) => r.roster_total_cost || 0) } },
-    ]);
-    const share = (k) => (r) => { const g = grp(r); return g.total ? g[k] / g.total : null; };
-    const allG = rows.map(grp); const sum = (k) => d3.sum(allG, (g) => g[k]);
-    const allRow = { shop: 'All', shop_name: 'All shops shown', _pin: true, _cls: 'tot', _g: mkG({ mgmt: sum('mgmt'), ss: sum('ss'), sa: sum('sa'), pt: sum('pt'), os: sum('os'), ot: sum('ot'), tr: sum('tr') }) };
-    drawTable($('dist-table'), rows.concat([allRow]), [
-      { key: 'shop', label: 'Shop', freeze: true }, tierCol('shop'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      ...(DATA.tm_excl_dmam ? [] : [{ key: 'd_mgmt', label: lblMgmt().replace(/ /g, '') + ' %', fmt: fmtP, get: share('mgmt') }]),
-      { key: 'd_ss', label: lblSs().replace(/ /g, '') + ' %', fmt: fmtP, get: share('ss') },
-      { key: 'd_sa', label: 'SA %', fmt: fmtP, get: share('sa') },
-      { key: 'd_other', label: 'PT, OS & others %', fmt: fmtP, get: share('other') },
-      { key: 'd_total', label: 'Current TM cost', fmt: fmtN, get: (r) => grp(r).total },
-    ]);
+      { key: 'pt_hours', label: 'PT hrs (actual)', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs (actual)', fmt: fmtH },
+      ...costCols(grp, ''),
+      { key: 'a_total', label: 'Actual TM cost (MTD)', fmt: fmtN, get: (r) => grp(r).total, bar: { max: d3.max(rows, (r) => grp(r).total || 0) } }]);
+    // Projected (full month)
+    const gP = (r) => r._gp || grpP(r);
+    const totP = { shop: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', _gp: sumG(grpP), _pn: { ss_n: sumK('ss', (r) => pn(r, 'ss_n')), sa_n: sumK('sa', (r) => pn(r, 'sa_n')), pt_hours: sumK('pt', (r) => pn(r, 'pt_hours')), os_hours: sumK('os', (r) => pn(r, 'os_hours')) },
+      _tgt: d3.sum(rows, (r) => (tgt.get(r.shop) || {}).target_tm || 0),
+      _ptp: d3.sum(rows.filter((r) => (tgt.get(r.shop) || {}).target_tm != null), (r) => grpP(r).total) }; // projection of the shops that have a target
+    const pv = (k) => (r) => r._pin ? r._pn[k] : pn(r, k);
+    const tgtOf = (r) => r._pin ? (tgt.size ? r._tgt : null) : ((tgt.get(r.shop) || {}).target_tm ?? null);
+    drawTable($('tm-table-p'), rows.concat(rows.length ? [totP] : []), [...head,
+      { key: 'p_ss_n', label: 'SS/ASS (roster)', fmt: fmtN, get: pv('ss_n') }, { key: 'p_sa_n', label: 'SA (roster)', fmt: fmtN, get: pv('sa_n') },
+      { key: 'p_pt_h', label: 'PT hrs (roster)', fmt: fmtH, get: pv('pt_hours') }, { key: 'p_os_h', label: 'OS hrs (schedule)', fmt: fmtH, get: pv('os_hours') },
+      ...costCols(gP, '_p'),
+      { key: 'p_total', label: 'Projected TM cost', fmt: fmtN, get: (r) => gP(r).total, bar: { max: d3.max(rows, (r) => grpP(r).total || 0) } },
+      ...(tgt.size ? [{ key: 'p_tgt', label: 'Target TM cost', fmt: fmtN, get: tgtOf },
+        { key: 'p_def', label: 'DEF (target − projection)', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), tone: (v) => v == null ? '' : (v < 0 ? 'neg' : 'pos'), get: (r) => { const t = tgtOf(r); return t == null ? null : t - (r._pin ? r._ptp : gP(r).total); } }] : [])]);
+    // Staff cost distribution: MTD and projected side by side
+    const share = (fn, k) => (r) => { const g = fn(r); return g.total ? g[k] / g.total : null; };
+    const allRow = { shop: 'All', shop_name: 'All shops shown', _pin: true, _cls: 'tot', _g: sumG(grp), _gp: sumG(grpP) };
+    const distCols = (fn, tag) => [
+      ...(DATA.tm_excl_dmam ? [] : [{ key: 'd_mgmt' + tag, label: lblMgmt().replace(/ /g, '') + ' % ' + tag, fmt: fmtP, get: share(fn, 'mgmt') }]),
+      { key: 'd_ss' + tag, label: lblSs().replace(/ /g, '') + ' % ' + tag, fmt: fmtP, get: share(fn, 'ss') },
+      { key: 'd_sa' + tag, label: 'SA % ' + tag, fmt: fmtP, get: share(fn, 'sa') },
+      { key: 'd_other' + tag, label: 'PT, OS & others % ' + tag, fmt: fmtP, get: share(fn, 'other') }];
+    drawTable($('dist-table'), rows.concat([allRow]), [...head,
+      ...distCols(grp, '(MTD)'), { key: 'd_total', label: 'TM cost (MTD)', fmt: fmtN, get: (r) => grp(r).total },
+      ...distCols(gP, '(Projected)'), { key: 'd_total_p', label: 'Projected TM cost', fmt: fmtN, get: (r) => gP(r).total }]);
+    document.querySelectorAll('.tm-act-to').forEach((el) => { el.textContent = (DATA.stamps || {}).tm_version ? `計到 ${DATA.stamps.tm_version}` : '計到 TM cost sheet 最新版本'; });
   }
 
 
@@ -1063,13 +1093,26 @@
     ];
     drawTable($('tt-dm-table'), groupBy('dm').concat([{ ...total, dm: 'Total' }]), cols([{ key: 'dm', label: 'DM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }]));
     drawTable($('tt-am-table'), groupBy('am').concat([{ ...total, am: 'Total' }]), cols([{ key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }]));
+    // By tier: average per shop (Vivian, 3/11/2026)
+    const tierOrder = (t) => { const m = String(t).match(/(\d+)/); return m ? +m[1] : 99; };
+    const avg = (o) => ({ ...o, a_tm: o.tm != null ? o.tm / o.shops : null, a_ptm: o.proj_tm != null ? o.proj_tm / o.shops : null, a_tgt: o._tgt_tm ? o._tgt_tm / o.shops : null,
+      a_def: o._tgt_tm && o.proj_tm != null ? (o._tgt_tm - o.proj_tm) / o.shops : null, a_gpa: o.gpa != null ? o.gpa / o.shops : null });
+    const tierRows = [...d3.group(shops, (r) => tierOf(r.shop_code))].sort((a, b) => tierOrder(a[0]) - tierOrder(b[0])).map(([t, rs]) => avg(agg(rs, { _tier_name: t })));
+    const defFmt = (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v);
+    drawTable($('tt-tier-table'), tierRows.concat(tierRows.length ? [avg({ ...total, _tier_name: 'All' })] : []), [
+      { key: '_tier_name', label: 'Tier', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN },
+      { key: 'target_pct', label: 'Target %', fmt: fmtP }, { key: 'a_pct', label: 'Actual % (MTD)', fmt: fmtP, get: (r) => ratio(r.tm, r.gpa) },
+      { key: 'p_pct', label: 'Projected %', fmt: fmtP, get: (r) => ratio(r.proj_tm, r.proj_gpa) },
+      { key: 'a_tm', label: 'Avg TM cost (MTD)', fmt: fmtN }, { key: 'a_gpa', label: 'Avg GPA (MTD)', fmt: fmtN },
+      { key: 'a_tgt', label: 'Avg target TM cost', fmt: fmtN }, { key: 'a_ptm', label: 'Avg projected TM cost', fmt: fmtN },
+      { key: 'a_def', label: 'Avg DEF (target − projection)', fmt: defFmt, tone: (v) => v == null ? '' : (v < 0 ? 'neg' : 'pos') }]);
     const ams = [...new Set(shops.map((r) => r.am))].sort(); const picked = ttAm.value;
     if (ttAm.options.length !== ams.length + 1) { ttAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); ttAm.value = picked; }
     const q = ttSearch.value.trim().toLowerCase();
     const rows = shops.filter((r) => (!ttAm.value || r.am === ttAm.value) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
     drawTable($('tt-shop-table'), rows.concat([{ ...agg(rows, { _pin: true, _cls: 'tot' }), shop_code: 'Total', shop_name: 'All shops shown' }]), cols([
       { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: 'am', label: 'AM', cls: 'l' }, { key: 'um', label: 'UM / SS', cls: 'l' }]));
+      { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'um', label: 'UM / SS', cls: 'l' }]));
   }
 
   const tierSel = document.getElementById('tier-filter');

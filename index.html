@@ -231,7 +231,7 @@
       <div class="grid">
         <div class="card"><h3>DM target achievement</h3><p class="note">POS GMV 對比月 target，將每個 DM 有 target 嘅舖加埋（Σ GMV ÷ Σ target）。預計達標 = 按月初至今 GMV 推算全月。<b class="pos-ex"></b></p><div class="scroll"><table id="pos-dm-table"></table></div></div>
         <div class="card"><h3>AM target achievement</h3><p class="note">按 AM 計 POS GMV 對比月 target，只計有 target 嘅舖；所以有冇 target 舖嘅 AM，數字會同 Tableau 有少少唔同。<b class="pos-ex"></b></p><div class="scroll"><table id="pos-am-table"></table></div></div>
-        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note">Takeaway GMV 包 MKT fund 同 RM discount。今個月冇 target 嘅舖（例如 KSE）只列出參考，唔計入任何合計。</p>
+        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note"><span class="pos-formula">Takeaway GMV 包 MKT fund 同 RM discount。</span>今個月冇 target 嘅舖（例如 KSE）只列出參考，唔計入任何合計。</p>
           <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="pos-table"></table></div></div>
       </div>
@@ -701,7 +701,11 @@
   function posCols(rows, detail) {
     const max = d3.max(rows, (r) => r.proj_ach || 0) || 0;
     const c = [{ key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'target', label: 'Target', fmt: fmtN }];
-    if (detail) c.push({ key: 'takeaway_gmv', label: 'Takeaway', fmt: fmtN }, { key: 'delivery_gmv', label: 'Delivery webcart', fmt: fmtN }, { key: 'liteapp_gmv', label: 'Lite app webcart', fmt: fmtN });
+    // Nov 2026 on: same columns as Tableau "POS (pospay Delivery and POS)" (webcart no longer x2; frozen x1.5; redemption x1.2/x1.5)
+    if (detail && (DATA.pos || {}).layout === 'nov') c.push({ key: 'takeaway_gmv', label: 'POS Takeaway GMV (incl. MKT fund & RM discount)', fmt: fmtN }, { key: 'delivery_gmv', label: 'POS Delivery GMV', fmt: fmtN },
+      { key: 'frozen_gmv', label: 'Frozen SKU GMV (x1.5)', fmt: fmtN }, { key: 'redemption_gmv', label: 'Redemption (x1.2/x1.5)', fmt: fmtN });
+    else if (detail) c.push({ key: 'takeaway_gmv', label: 'Takeaway', fmt: fmtN }, { key: 'delivery_gmv', label: 'Delivery webcart', fmt: fmtN }, { key: 'liteapp_gmv', label: 'Lite app webcart', fmt: fmtN });
+    document.querySelectorAll('.pos-formula').forEach((el) => { el.textContent = (DATA.pos || {}).layout === 'nov' ? '由 11 月起跟 Tableau 新計法：Total POS GMV = POS Takeaway GMV（包 MKT fund 同 RM discount）+ POS Delivery GMV + Frozen SKU GMV（x1.5）+ Redemption（x1.2 / x1.5）；webcart 唔再 x2。' : 'Takeaway GMV 包 MKT fund 同 RM discount。'; });
     c.push({ key: 'pos_gmv', label: 'Total POS GMV', fmt: fmtN }, { key: 'current_ach', label: 'Current ach.', fmt: fmtP },
       { key: 'proj_gmv', label: 'Projected GMV', fmt: fmtN }, { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls, bar: { max, tone: true } });
     return c;

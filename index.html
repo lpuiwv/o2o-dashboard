@@ -239,7 +239,7 @@
       <div class="grid">
         <div class="card"><h3>DM target achievement</h3><p class="note">POS GMV 對比月 target，將每個 DM 有 target 嘅舖加埋（Σ GMV ÷ Σ target）。預計達標 = 按月初至今 GMV 推算全月。<b class="pos-ex"></b></p><div class="scroll"><table id="pos-dm-table"></table></div></div>
         <div class="card"><h3>AM target achievement</h3><p class="note">按 AM 計 POS GMV 對比月 target，只計有 target 嘅舖；所以有冇 target 舖嘅 AM，數字會同 Tableau 有少少唔同。<b class="pos-ex"></b></p><div class="scroll"><table id="pos-am-table"></table></div></div>
-        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note"><span class="pos-formula">Takeaway GMV 包 MKT fund 同 RM discount。</span>今個月冇 target 嘅舖（例如 KSE）只列出參考，唔計入任何合計。</p>
+        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note"><span class="pos-formula">Takeaway GMV 包 MKT fund 同 RM discount。</span><span class="pos-notarget"></span></p>
           <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="pos-table"></table></div></div>
       </div>
@@ -747,6 +747,7 @@
     const t = { target: sm('target'), pos_gmv: sm('pos_gmv'), proj_gmv: sm('proj_gmv') };
     t.current_ach = t.target ? t.pos_gmv / t.target : null; t.proj_ach = t.target ? t.proj_gmv / t.target : null;
     const exTxt = noTarget.length ? `唔計 ${noTarget.join('、')}（冇 target）` : '';
+    document.querySelectorAll('.pos-notarget').forEach((el) => { el.textContent = noTarget.length ? `今個月冇 target 嘅舖（${noTarget.join('、')}）只列出參考，唔計入任何合計。` : '今個月全部舖都有 target，全部計入合計。'; });
     document.querySelectorAll('.pos-ex').forEach((el) => { el.textContent = noTarget.length ? ` 達標 % 已剔除 ${noTarget.join('、')}（今個月冇 target）。` : ''; });
     $('pos-note').textContent = `來自 Tableau（O2O Report › Shop Monthly Target），${P.period}。` + (noTarget.length ? ` ${noTarget.join('、')} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）。` : '');
     tiles($('pos-kpis'), [

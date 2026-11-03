@@ -196,8 +196,10 @@ def parse_tm_v1(values):
         return [i for i in range(lo, hi + 1) for p in prefixes if head[i].startswith(p)]
 
     um_split = bool(find(["UM/SS/ASS 成本"], 0, cut))
-    tgt_i = [i for i, h in enumerate(head) if "TM Cost (excl" in h and "DEF" not in h]
-    def_i = [i for i, h in enumerate(head) if "TM Cost DEF" in h]
+    # "<Mon> TM Cost (excl. DMAM)" / "<Mon> TM Target (excl. DMAM)" (renamed 3/11/2026) and the matching "… DEF …" column
+    is_tgt = lambda h: "excl" in h and "DMAM" in h and ("TM Cost" in h or "TM Target" in h)
+    tgt_i = [i for i, h in enumerate(head) if is_tgt(h) and "DEF" not in h]
+    def_i = [i for i, h in enumerate(head) if is_tgt(h) and "DEF" in h]
 
     def block(r, lo, hi):
         v = lambda ps: sum(num(r[i]) or 0 for i in find(ps, lo, hi) if i < len(r))

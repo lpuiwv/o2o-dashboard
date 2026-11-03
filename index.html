@@ -405,9 +405,10 @@
         if (c.sign && v != null) td.classList.add(v < 0 ? 'neg' : 'pos');
         if (c.tone) { const k = c.tone(v); if (k) td.classList.add(k); }
         if (c.flag && c.flag(r)) { td.classList.add('flag'); td.textContent += ' ⚠'; td.title = 'GP% 異常高，請檢查 source 數據'; }
-        if (c.bar && v != null && c.bar.max > 0) {
+        // No bar on Total / pinned rows: a total is many times the biggest shop and its bar would stretch the column (Vivian, 3/11/2026)
+        if (c.bar && v != null && c.bar.max > 0 && !r._pin) {
           const s = document.createElement('span'); s.className = 'bar';
-          s.style.width = Math.max(2, Math.round(Math.abs(v) / c.bar.max * 60)) + 'px';
+          s.style.width = Math.min(60, Math.max(2, Math.round(Math.abs(v) / c.bar.max * 60))) + 'px';
           s.style.background = c.bar.tone ? (v >= 1 ? css('--accent') : (v < 0.8 ? css('--bad') : css('--muted'))) : (v < 0 ? css('--bad') : css('--accent')); td.appendChild(s);
         }
         tr.appendChild(td);

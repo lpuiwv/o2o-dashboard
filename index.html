@@ -30,6 +30,13 @@
   h3 { font-size: 15px; font-weight: 500; margin: 0; }
   .sub { color: var(--muted); margin: 4px 0 0; }
   .note { color: var(--muted); font-size: 12px; margin: 0; }
+  .defs { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 8px 0 4px; font-size: 12px; }
+  .defs dt { font-weight: 600; color: var(--fg); margin: 0; }
+  .defs dd { color: var(--muted); margin: 0; }
+  details.src { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+  details.src summary { cursor: pointer; color: var(--accent); }
+  details.src ul { margin: 4px 0 0; padding-left: 18px; }
+  @media (max-width: 600px) { .defs { grid-template-columns: 1fr; } .defs dd { margin-bottom: 4px; } }
   .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); }
   .tabs button { font: inherit; font-weight: 500; background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
   .tierbox { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 4px 0; white-space: nowrap; }
@@ -187,7 +194,26 @@
       <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。圓心係 PT + 外判（OS）佔幾多 %。PT 用 roster 全月時數計；<span class="tm-proj-note"></span></p><div class="pie" id="mix-proj"></div></div>
       <div class="card" id="tt-card" hidden>
         <h3>TM cost vs target</h3>
-        <p class="note">TM cost 全部來自 TM cost sheet「<span class="tt-tab"></span>」（已剔除 DM、AM）：TM cost (MTD) = 實數小計（<span class="tt-days"></span>），Projected TM cost = Projection 合計，Target TM cost = 「<span class="tt-mon"></span> TM Cost (excl. DMAM)」，DEF = target − projection（負數 = 超咗 target，紅色）。Target % 來自「O2O Shop Target 2026」sheet 嘅「<span class="tt-mon"></span> TM cost target」：TM cost ÷（POS GPA + Pickup GPA）嘅目標（Pickup GPA = pickup GMV × 6.9%）。GPA 用 DOP sheet「Raw」每日數<span class="tt-gpa"></span>；預計 GPA = 月初至今 GPA ÷ 已有日數 × 全月日數。DM / AM 合計 % = Σ TM cost ÷ Σ GPA；合計 Target % = Σ Target TM cost ÷ Σ（Target TM cost ÷ 該舖 target %）。跟 Shop tier 篩選。</p>
+        <p class="note tt-lead">每間舖嘅 TM cost 對比 target。<b>已剔除 DM、AM</b>，跟 Shop tier 篩選。DEF 負數（紅色）= 預計超咗 target。</p>
+        <dl class="defs">
+          <dt>TM cost (MTD)</dt><dd>月初至今實際 TM cost（<span class="tt-days"></span>）</dd>
+          <dt>Projected TM cost</dt><dd>全月預計 TM cost</dd>
+          <dt>Target TM cost</dt><dd>全月 TM cost target</dd>
+          <dt>DEF</dt><dd>Target TM cost − Projected TM cost</dd>
+          <dt>GPA</dt><dd>POS GPA + Pickup GPA（Pickup GPA = pickup GMV × 6.9%）<span class="tt-gpa"></span></dd>
+          <dt>Actual % / Projected %</dt><dd>TM cost ÷ GPA；Projected 用全月預計 TM cost ÷ 預計 GPA（月初至今 GPA ÷ 已有日數 × 全月日數）</dd>
+          <dt>Target %</dt><dd>每間舖 TM cost ÷ GPA 嘅目標</dd>
+          <dt>Projected vs target</dt><dd>Projected % − Target %（pp；正數 = 預計 TM cost 佔 GPA 高過目標，紅色）</dd>
+        </dl>
+        <details class="src"><summary>資料來源同合計計法</summary>
+          <ul>
+            <li>TM cost、Projected、Target TM cost：TM cost sheet「<span class="tt-tab"></span>」（Target 欄 =「<span class="tt-mon"></span> TM Cost (excl. DMAM)」）</li>
+            <li>Target %：「O2O Shop Target 2026」sheet 嘅「<span class="tt-mon"></span> TM cost target」tab</li>
+            <li>GPA：DOP sheet「Raw」每日數</li>
+            <li>DM / AM / Total 嘅 %：Σ TM cost ÷ Σ GPA（唔係平均每間舖嘅 %）</li>
+            <li>合計 Target %：Σ Target TM cost ÷ Σ（Target TM cost ÷ 該舖 Target %）</li>
+          </ul>
+        </details>
         <h4 class="sub-h">By DM</h4>
         <div class="scroll"><table id="tt-dm-table"></table></div>
         <h4 class="sub-h">By AM</h4>
@@ -1118,7 +1144,7 @@
     const iso = (x) => x ? `${x.slice(8, 10)}/${x.slice(5, 7)}` : '';
     document.querySelectorAll('.tt-days').forEach((el) => { el.textContent = T.days ? `${iso(T.from)} – ${iso(T.to)}，${T.days} 日，全月 ${T.days_in_month} 日` : '未有本月數據'; });
     document.querySelectorAll('.tt-tab').forEach((el) => { el.textContent = DATA.tm_tab || ''; });
-    document.querySelectorAll('.tt-gpa').forEach((el) => { el.textContent = !T.gpa_days ? '（Raw 未有本月數據，Actual % 同 Projected % 暫時空白）' : (T.gpa_days < T.days ? `（Raw 只計到 ${iso(T.gpa_to)}，GPA 按 ${T.gpa_days} 日平均推到 ${T.days} 日）` : `（同 TM cost 一樣計到 ${iso(T.gpa_to)}）`); });
+    document.querySelectorAll('.tt-gpa').forEach((el) => { el.textContent = !T.gpa_days ? '（Raw 未有本月數據，Actual % 同 Projected % 暫時空白）' : (T.gpa_days < T.days ? `（Raw 只計到 ${iso(T.gpa_to)}，GPA 按 ${T.gpa_days} 日平均推到 ${T.days} 日）` : `（計到 ${iso(T.gpa_to)}，同 TM cost 一樣）`); });
     const shops = T.shops.filter((r) => passTier(r.shop_code)).map((r) => ({ ...r, _tgt_tm: r.target_tm, _tgt_gpa: r.target_tm != null && r.target_pct ? r.target_tm / r.target_pct : null }));
     const ratio = (a, b) => (a != null && b) ? a / b : null; // b = 0 (no GPA yet) -> blank
     const agg = (rows, extra) => {

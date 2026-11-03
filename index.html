@@ -243,6 +243,12 @@
           <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="pos-table"></table></div></div>
       </div>
+      <div class="grid" id="red-body">
+        <div class="card"><h3>Redemption (with x1.2 &amp; x1.5) by SKU</h3><p class="note" id="red-note"></p><div class="scroll"><table id="red-sku-table"></table></div></div>
+        <div class="card"><h3>Redemption (with x1.2 &amp; x1.5) by shop &amp; SKU</h3><p class="note">每間舖每隻 SKU 一行。Redemption amount = GMV after − GMV before（即係 x1.2 / x1.5 多咗計嘅 GMV）。</p>
+          <div class="ctrl"><select id="red-am-filter" aria-label="Filter by AM"></select><select id="red-sku-filter" aria-label="Filter by SKU"></select><input id="red-search" type="search" placeholder="搜尋舖號、SKU 或貨品名" aria-label="Search"></div>
+          <div class="scroll"><table id="red-table"></table></div></div>
+      </div>
     </div>
   </section>
 
@@ -628,6 +634,8 @@
   const posAm = $('pos-am-filter'), posSearch = $('pos-search');
   posAm.addEventListener('change', () => draw());
   posSearch.addEventListener('input', () => draw());
+  const redAm = $('red-am-filter'), redSku = $('red-sku-filter'), redSearch = $('red-search');
+  [redAm, redSku].forEach((el) => el.addEventListener('change', () => draw())); redSearch.addEventListener('input', () => draw());
   const achCls = (v) => v == null ? '' : (v >= 1 ? 'pos' : (v < 0.8 ? 'neg' : ''));
   let mode = 'total';
   $('mode-total').addEventListener('click', () => { mode = 'total'; draw(); });
@@ -778,6 +786,48 @@
     const q = posSearch.value.trim().toLowerCase();
     const rows = P.shops.filter((r) => passTier(r.shop_code) && (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
     drawTable($('pos-table'), rows, posCols(rows, true));
+    drawRedemption();
+  }
+
+  // Redemption (with x1.2 & x1.5) by SKU — Tableau view copied into the POS sheet's "Redemption by SKU" tab (Vivian, 3/11/2026)
+  function drawRedemption() {
+    const R = DATA.redemption;
+    $('red-body').hidden = !R; if (!R) return;
+    const names = Object.fromEntries(((DATA.pos || {}).shops || []).map((r) => [r.shop_code, r.shop_name]));
+    const all = R.rows.filter((r) => passTier(r.shop_code));
+    const period = (r) => r.start || r.end ? `${r.start || ''} – ${r.end || ''}` : '';
+    const multTxt = (v) => v == null ? '' : 'x' + v;
+    const sumCols = ['gmv_before', 'redemption', 'gmv_after'];
+    const bySku = d3.rollups(all, (v) => ({ sku_name: v[0].sku_name, mult: [...new Set(v.map((r) => r.mult))].join(' / '), period: [...new Set(v.map(period))].join('; '),
+      shops: new Set(v.map((r) => r.shop_code)).size, ...Object.fromEntries(sumCols.map((k) => [k, d3.sum(v, (r) => r[k] || 0)])) }), (r) => r.sku_id)
+      .map(([sku_id, o]) => ({ sku_id, ...o })).sort((a, b) => b.redemption - a.redemption);
+    const tot = { sku_id: 'Total', sku_name: '', _pin: true, _cls: 'tot', shops: new Set(all.map((r) => r.shop_code)).size, ...Object.fromEntries(sumCols.map((k) => [k, d3.sum(bySku, (r) => r[k])])) };
+    const share = (r) => tot.redemption ? r.redemption / tot.redemption : null;
+    const maxRed = d3.max(bySku, (r) => r.redemption) || 0;
+    $('red-note').textContent = `來自 Tableau（O2O Report › Redemption(with x1.2 & x1.5) by SKU）${R.period ? '，' + R.period : ''}。每隻 SKU 將所有舖加埋；Share = 佔總 redemption 幾多 %。`;
+    drawTable($('red-sku-table'), bySku.concat(bySku.length ? [tot] : []), [
+      { key: 'sku_id', label: 'SKU', freeze: true }, { key: 'sku_name', label: 'SKU name', cls: 'l', freeze: true },
+      { key: 'mult', label: 'Multiplier', get: (r) => r._pin ? '' : (String(r.mult).includes('/') ? r.mult : multTxt(r.mult)) }, { key: 'period', label: 'Promotion period', cls: 'l' },
+      { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'gmv_before', label: 'GMV (before x1.2 & x1.5)', fmt: fmtN },
+      { key: 'redemption', label: 'Redemption amount', fmt: fmtN, bar: { max: maxRed } }, { key: 'gmv_after', label: 'GMV (after x1.2 & x1.5)', fmt: fmtN },
+      { key: '_share', label: 'Share', fmt: fmtP, get: share },
+    ]);
+    const pickedAm = redAm.value, pickedSku = redSku.value;
+    const ams = [...new Set(R.rows.map((r) => r.am))].sort();
+    if (redAm.options.length !== ams.length + 1) { redAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); redAm.value = pickedAm; }
+    const skus = [...new Map(R.rows.map((r) => [r.sku_id, r.sku_name])).entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    if (redSku.options.length !== skus.length + 1) { redSku.replaceChildren(new Option('All SKUs', ''), ...skus.map(([id, n]) => new Option(`${id} ${n}`, id))); redSku.value = pickedSku; }
+    const q = redSearch.value.trim().toLowerCase();
+    const rows = all.filter((r) => (!pickedAm || r.am === pickedAm) && (!pickedSku || r.sku_id === pickedSku)
+      && (!q || `${r.shop_code} ${names[r.shop_code] || ''} ${r.sku_id} ${r.sku_name}`.toLowerCase().includes(q)));
+    const dTot = { am: 'Total', shop_code: '', _pin: true, _cls: 'tot', ...Object.fromEntries(sumCols.map((k) => [k, d3.sum(rows, (r) => r[k] || 0)])) };
+    drawTable($('red-table'), rows.concat(rows.length ? [dTot] : []), [
+      { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'),
+      { key: '_name', label: 'Shop name', cls: 'l', get: (r) => r._pin ? '' : (names[r.shop_code] || '') }, { key: 'dm', label: 'DM', cls: 'l' },
+      { key: 'sku_id', label: 'SKU' }, { key: 'sku_name', label: 'SKU name', cls: 'l' }, { key: 'mult', label: 'Multiplier', get: (r) => r._pin ? '' : multTxt(r.mult) },
+      { key: '_period', label: 'Promotion period', cls: 'l', get: (r) => r._pin ? '' : period(r) },
+      { key: 'gmv_before', label: 'GMV (before x1.2 & x1.5)', fmt: fmtN }, { key: 'redemption', label: 'Redemption amount', fmt: fmtN }, { key: 'gmv_after', label: 'GMV (after x1.2 & x1.5)', fmt: fmtN },
+    ]);
   }
 
   // Manual Discount (Tableau "Manual Discount › Shop View", copied into the POS sheet)

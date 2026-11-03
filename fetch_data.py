@@ -481,6 +481,40 @@ def parse_tm_target(values):
     return out
 
 
+def parse_tm_target_summary(values):
+    """'<Mon> TM cost target' columns I:L (Vivian, 3/11/2026): pivot of DM / AM / UM / "TM Cost %" target, with
+    "<AM> Total", "<DM> Total" and "Grand Total" rows. Found by the "TM Cost %" header, so it still works if it moves.
+    Returns {dm: {name: pct}, am: {name: pct}, um: {name: pct}, total: pct} or None."""
+    head_r = col = None
+    for ri, r in enumerate(values[:10]):
+        cells = [str(c).strip().lower() for c in r]
+        hit = [i for i, c in enumerate(cells) if c == "tm cost %"]
+        if hit and hit[0] >= 3:
+            head_r, col = ri, hit[0]
+            break
+    if col is None:
+        return None
+    out = {"dm": {}, "am": {}, "um": {}, "total": None}
+    dm = am = ""
+    for r in values[head_r + 1:]:
+        r = list(r) + [""] * (col + 1 - len(r))
+        d, a, u = (str(x).replace("\t", "").strip() for x in r[col - 3:col])
+        p = num(r[col])
+        if d == "Grand Total":
+            out["total"] = p
+            break
+        if d.endswith(" Total"):
+            out["dm"][d[:-6].strip()] = p
+            continue
+        if a.endswith(" Total"):
+            out["am"][a[:-6].strip()] = p
+            continue
+        dm, am = d or dm, a or am
+        if u and p is not None:
+            out["um"][u] = p
+    return out if (out["dm"] or out["am"] or out["total"] is not None) else None
+
+
 def parse_shop_gpa_target(values):
     """'<Mon>' tab of the target sheet: Code, "<Mon> Pick up Shop version" (pickup GMV target), "GPA" (POS GPA target).
     Returns {code: POS GPA target + pickup GMV target × 6.9%}."""
@@ -683,6 +717,7 @@ def fetch_all():
         "dop_target": parse_dop_target(raw.get("dop_target") or []),
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
+        "tm_target_pct": parse_tm_target_summary(raw.get("tm_target") or []),
         "tm_target": tm_vs_target(parse_tm_target(raw.get("tm_target") or []), raw.get("raw") or [], tm, raw["_date"],
                                   parse_shop_gpa_target(raw.get("gpa_target") or []), tm_actual_day(raw)),
         "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio, "tm_excl_dmam": excl_dmam,

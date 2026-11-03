@@ -231,6 +231,10 @@ def parse_tm_v1(values):
 POS_SHOP_COLS = ["dm", "am", "shop_code", "shop_name", "target", "takeaway_gmv", "delivery_gmv", "liteapp_gmv",
                  "pos_gmv", "current_ach", "proj_gmv", "proj_ach"]
 POS_AM_COLS = ["am", "target", "pos_gmv", "current_ach", "proj_ach"]
+# From Nov 2026 Tableau changed the POS GMV formula (Vivian, 3/11/2026): webcart no longer counted x2; Total POS GMV =
+# Takeaway (incl. MKT fund & RM discount) + POS Delivery GMV + Frozen SKU GMV (x1.5) + Redemption (x1.2/x1.5).
+POS_SHOP_COLS_NOV = ["dm", "am", "shop_code", "shop_name", "target", "takeaway_gmv", "delivery_gmv", "frozen_gmv",
+                     "redemption_gmv", "pos_gmv", "current_ach", "proj_gmv", "proj_ach"]
 
 
 def parse_pos(values, cols, text_cols, total_label="Grand Total"):
@@ -250,10 +254,12 @@ def parse_pos(values, cols, text_cols, total_label="Grand Total"):
 def fetch_pos(get):
     """POS GMV vs target, copied from Tableau into the POS sheet (optional)."""
     try:
-        shops, total = parse_pos(get(POS_SHEET, "'POS by shop'!A1:L200"), POS_SHOP_COLS, {"dm", "am", "shop_code", "shop_name"})
+        raw = get(POS_SHEET, "'POS by shop'!A1:M200")
+        layout = "nov" if raw and any("frozen" in str(h).lower() for h in raw[0]) else "old"
+        shops, total = parse_pos(raw, POS_SHOP_COLS_NOV if layout == "nov" else POS_SHOP_COLS, {"dm", "am", "shop_code", "shop_name"})
         am, am_total = parse_pos(get(POS_SHEET, "'AM achievement'!A1:E30"), POS_AM_COLS, {"am"})
         info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B10") if r}
-        return {"shops": shops, "total": total or am_total, "am": am, "period": info.get("Period", ""), "exported_at": info.get("Exported at", ""), "tableau_updated": info.get("Tableau last update", "")}
+        return {"shops": shops, "total": total or am_total, "am": am, "layout": layout, "period": info.get("Period", ""), "exported_at": info.get("Exported at", ""), "tableau_updated": info.get("Tableau last update", "")}
     except Exception as e:
         print(f"POS target sheet not read: {e}", file=sys.stderr)
         return None

@@ -296,6 +296,25 @@ def fetch_disposal(get):
         return None
 
 
+RED_COLS = ["dm", "am", "shop_code", "sku_id", "sku_name", "mult", "start", "end", "gmv_before", "redemption", "gmv_after"]
+
+
+def fetch_redemption(get):
+    """Redemption (with x1.2 & x1.5) by SKU per shop, copied from Tableau into the POS sheet's 'Redemption by SKU' tab
+    by the daily scheduled task (Vivian, 3/11/2026). Optional."""
+    try:
+        rows, _ = parse_pos(get(POS_SHEET, "'Redemption by SKU'!A1:K6000"), RED_COLS,
+                            {"dm", "am", "shop_code", "sku_id", "sku_name", "start", "end"})
+        rows = [r for r in rows if r.get("sku_id") and r.get("shop_code") and "All" not in (r["sku_id"], r["shop_code"], r["am"])]
+        if not rows:
+            return None
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B20") if r}
+        return {"rows": rows, "period": info.get("Redemption period", ""), "exported_at": info.get("Redemption exported at", "")}
+    except Exception as e:
+        print(f"Redemption tab not read: {e}", file=sys.stderr)
+        return None
+
+
 def fetch_md(get):
     """Manual Discount by shop, copied from Tableau into the POS sheet's 'Manual Discount' tab (optional)."""
     try:
@@ -657,6 +676,7 @@ def fetch_all():
         "pos": fetch_pos(get),
         "md": fetch_md(get),
         "disposal": fetch_disposal(get),
+        "redemption": fetch_redemption(get),
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),

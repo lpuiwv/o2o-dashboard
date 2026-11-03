@@ -202,7 +202,7 @@
           <dt>DEF</dt><dd>Target TM cost − Projected TM cost</dd>
           <dt>GPA</dt><dd>POS GPA + Pickup GPA（Pickup GPA = pickup GMV × 6.9%）<span class="tt-gpa"></span></dd>
           <dt>Actual % / Projected %</dt><dd>TM cost ÷ GPA；Projected 用全月預計 TM cost ÷ 預計 GPA（月初至今 GPA ÷ 已有日數 × 全月日數）</dd>
-          <dt>Target %</dt><dd>每間舖 TM cost ÷ GPA 嘅目標</dd>
+          <dt>Target %</dt><dd>TM cost ÷ GPA 嘅目標；每間舖用 target tab F 欄，DM / AM / Total 用 I–L 欄</dd>
           <dt>Projected vs target</dt><dd>Projected % − Target %（pp；正數 = 預計 TM cost 佔 GPA 高過目標，紅色）</dd>
         </dl>
         <details class="src"><summary>資料來源同合計計法</summary>
@@ -211,7 +211,7 @@
             <li>Target %：「O2O Shop Target 2026」sheet 嘅「<span class="tt-mon"></span> TM cost target」tab</li>
             <li>GPA：DOP sheet「Raw」每日數</li>
             <li>DM / AM / Total 嘅 %：Σ TM cost ÷ Σ GPA（唔係平均每間舖嘅 %）</li>
-            <li>合計 Target %：Σ Target TM cost ÷ Σ（Target TM cost ÷ 該舖 Target %）</li>
+            <li>DM / AM / Total 嘅 Target %：直接用「<span class="tt-mon"></span> TM cost target」tab I–L 欄（DM / AM / UM / TM Cost %）；揀咗 Shop tier 時改用 Σ Target TM cost ÷ Σ（Target TM cost ÷ 該舖 Target %）</li>
           </ul>
         </details>
         <h4 class="sub-h">By DM</h4>
@@ -1152,8 +1152,12 @@
       const tg = d3.sum(rows, (r) => r._tgt_gpa || 0), tt = d3.sum(rows, (r) => r._tgt_tm || 0);
       return { ...extra, shops: rows.length, tm: s('tm'), gpa: s('gpa'), proj_tm: s('proj_tm'), proj_gpa: s('proj_gpa'), _tgt_tm: tt, target_pct: tg ? tt / tg : null };
     };
-    const groupBy = (k) => [...d3.group(shops, (r) => r[k] || '—')].sort((a, b) => String(a[0]).localeCompare(String(b[0]))).map(([name, rows]) => agg(rows, { [k]: name }));
-    const total = agg(shops, { _pin: true, _cls: 'tot' });
+    // DM / AM / Grand Total target % come straight from the target tab's pivot (columns I:L, Vivian 3/11/2026) when no
+    // tier filter is on; with a tier filter (or a name missing there) fall back to Σ target TM cost ÷ Σ target GPA
+    const SP = !document.getElementById('tier-filter').value ? DATA.tm_target_pct : null;
+    const fromSheet = (o, lvl, name) => { const v = SP && SP[lvl] ? (lvl === 'total' ? SP.total : SP[lvl][name]) : null; return v != null ? { ...o, target_pct: v, _tp_sheet: true } : o; };
+    const groupBy = (k) => [...d3.group(shops, (r) => r[k] || '—')].sort((a, b) => String(a[0]).localeCompare(String(b[0]))).map(([name, rows]) => fromSheet(agg(rows, { [k]: name }), k, name));
+    const total = fromSheet(agg(shops, { _pin: true, _cls: 'tot' }), 'total');
     const over = (v) => v == null ? '' : (v > 0 ? 'neg' : 'pos');
     const sgn = (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v);
     const pp = (v) => v == null ? '' : (v > 0 ? '+' : '') + d3.format('.1f')(v * 100) + ' pp';

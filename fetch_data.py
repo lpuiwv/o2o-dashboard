@@ -103,25 +103,59 @@ def shop_key(h):
     return None
 
 
+PROJ_SHOP_KEYS = (("pos gpa", "proj_pos_gpa"), ("pickup gpa", "proj_pickup_gpa"), ("proj. pickup gmv", "proj_pickup_gmv"),
+                  ("proj. pos gmv", "proj_pos_gmv"), ("planned", "tm_plan"), ("disposal", "proj_disposal_cost"),
+                  ("other", "proj_other_mkt_cost"), ("proj. dop", "proj_dop"), ("open day", "open_day"))
+
+
 def parse_shops(values):
-    head = values[0] if values else []
+    """'DOP MTD - <Mon YYYY>'. From Nov 2026 the tab has two header rows: a group row ("To date" / "Projected (with
+    weekday/weekend factor)") and the column names, where the projected block repeats names (POS GPA, Pickup GPA,
+    Disposal…). Columns from the "Projected" group on are mapped to proj_* keys (Vivian, 4/11/2026: Proj. DOP was being
+    read from the projected POS GPA column)."""
+    hi = next((i for i, r in enumerate(values[:5]) if any(str(c).strip().lower() == "shop code" for c in r)), 0)
+    head = values[hi] if values else []
+    group = values[hi - 1] if hi > 0 else []
+    proj_from = next((i for i, c in enumerate(group) if str(c).strip().lower().startswith("projected")), None)
     cols = {}
     for i, h in enumerate(head):
-        k = shop_key(h)
+        if proj_from is not None and i >= proj_from:
+            hh = str(h).split("\n")[0].strip().lower()
+            k = next((key for pre, key in PROJ_SHOP_KEYS if hh.startswith(pre)), None)
+        else:
+            k = shop_key(h)
         if k and k not in cols:
             cols[k] = i
     if not {"shop_code", "am", "dop"} <= set(cols):  # old fixed layout
         cols = {k: i for i, k in enumerate(SHOP_COLS)}
+    extra = [k for k, _ in ((v, None) for _, v in PROJ_SHOP_KEYS) if k in cols and k not in ("proj_dop", "tm_plan")]
     rows = []
-    for r in values[1:]:
+    for r in values[hi + 1:]:
         g = lambda k: r[cols[k]] if k in cols and cols[k] < len(r) else ""
-        if not g("shop_code") or not g("am"):  # skip TOTAL / note lines (no AM)
+        if not g("shop_code") or not g("am") or str(g("shop_code")).strip().lower() == "shop code":  # skip TOTAL / note / header lines
             continue
         row = {"shop_code": g("shop_code"), "shop_name": g("shop_name"), "am": g("am"), "dm": g("dm")}
-        for k in SHOP_COLS[4:] + ["tm_plan"]:
+        for k in SHOP_COLS[4:] + ["tm_plan"] + extra:
             row[k] = num(g(k))
         rows.append(row)
     return rows
+
+
+EXCL_SHOPS = ("SWH", "CHE", "EPR")  # outlets + EPR, as in the sheet's 'Excl. Outlet & EPR' blocks
+
+
+def fill_team_from_shops(team, shops, key, excl=False):
+    """Summary tabs from Nov 2026 have no Proj. DOP column (and 'TM Full Month (Plan)' showed the disposal cost):
+    take Proj. DOP and planned TM cost per DM / AM as the sum of the shop rows (Vivian, 4/11/2026)."""
+    use = [s for s in shops if not (excl and s["shop_code"] in EXCL_SHOPS)]
+    for r in team:
+        mine = [s for s in use if s.get(key) == r.get(key)]
+        if not mine:
+            continue
+        if r.get("proj_dop") is None and any(s.get("proj_dop") is not None for s in mine):
+            r["proj_dop"] = round(sum(s.get("proj_dop") or 0 for s in mine), 2)
+        if any(s.get("tm_plan") is not None for s in mine):
+            r["tm_plan"] = round(sum(s.get("tm_plan") or 0 for s in mine), 2)
 
 
 TM_MAP = {"shop": 0, "shop_name": 1, "ss_n": 5, "ss_cost": 6, "assp_n": 7, "assp_cost": 8, "sa_n": 9,
@@ -428,6 +462,26 @@ def parse_dop_target(values):
                 diff = proj - target  # the sheet dropped its Difference column; work it out
             out[block].append({"name": first, "target": target, "proj_dop": proj, "achievement": num(r[5]), "difference": diff})
     return out
+
+
+
+def fill_dop_target(t, dm_ex, am_ex):
+    """'<Mon> Target' tab of Nov 2026 has Proj. DOP blank (so its achievement shows 200% / 0%): use the dashboard's own
+    Proj. DOP (sum of shops, excl. outlets & EPR - the targets exclude outlets) and work out achievement and difference
+    with the sheet's rule: negative target -> target / projection, otherwise projection / target (Vivian, 4/11/2026)."""
+    if not t:
+        return t
+    for block, team in (("dm", dm_ex), ("am", am_ex)):
+        proj = {r.get(block): r.get("proj_dop") for r in team}
+        for r in t.get(block, []):
+            if r.get("proj_dop") is None and proj.get(r["name"]) is not None:
+                p, tg = proj[r["name"]], r.get("target")
+                r["proj_dop"] = p
+                r["proj_from"] = "dashboard"
+                if tg is not None:
+                    r["difference"] = p - tg
+                    r["achievement"] = (tg / p if tg < 0 else p / tg) if p and tg else None
+    return t
 
 
 def parse_tm_daily(values):
@@ -761,6 +815,8 @@ def fetch_all():
     dm_ex, _, _ = parse_team(raw["dm_ex"], "dm")
     am_ex, _, _ = parse_team(raw["am_ex"], "am")
     shops = parse_shops(raw["shops"])
+    for team, key, ex in ((dm, "dm", False), (am, "am", False), (dm_ex, "dm", True), (am_ex, "am", True)):
+        fill_team_from_shops(team, shops, key, ex)
     ft_ratio = None
     if raw["_tm_kind"] == "v1":
         tm, um_split = parse_tm_v1(raw["tm"])
@@ -792,7 +848,7 @@ def fetch_all():
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),
-        "dop_target": parse_dop_target(raw.get("dop_target") or []),
+        "dop_target": fill_dop_target(parse_dop_target(raw.get("dop_target") or []), dm_ex, am_ex),
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
         "tm_target_pct": parse_tm_target_summary(raw.get("tm_target") or []),

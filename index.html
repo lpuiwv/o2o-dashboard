@@ -227,18 +227,20 @@
       </div>
       <div class="card">
         <h3>TM cost by shop — Actual（月初至今）</h3>
-        <p class="note">呢個表全部係<b>實際</b>數（月初至今，<span class="tm-act-to"></span>）：人數、時數同成本都係實數，成本已包上面講嘅 overhead。全月預計數喺下一個表。AM 篩選同搜尋兩個表一齊用。</p>
+        <p class="note">呢個表全部係<b>實際</b>數（月初至今，<span class="tm-act-to"></span>）：人數、時數同成本都係實數，成本已包上面講嘅 overhead。全月預計數喺下一個表。AM 篩選同搜尋會同下面兩個表同步。</p>
         <div class="ctrl"><select id="tm-am-filter" aria-label="Filter by AM"></select><input id="tm-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table"></table></div>
       </div>
       <div class="card">
         <h3>TM cost by shop — Projected（全月預計）</h3>
-        <p class="note">呢個表全部係<b>全月預計</b>數：固定成本按全月計，PT 用 roster 時數，外判用外判更表。有 target 嘅月份會顯示 Target TM cost 同 DEF（target − projection，負數 = 預計超 target，紅色）。用上面個表嘅 AM 篩選同搜尋。</p>
+        <p class="note">呢個表全部係<b>全月預計</b>數：固定成本按全月計，PT 用 roster 時數，外判用外判更表。有 target 嘅月份會顯示 Target TM cost 同 DEF（target − projection，負數 = 預計超 target，紅色）。AM 篩選同搜尋同上面個表同步。</p>
+        <div class="ctrl"><select class="tm-am-mirror" aria-label="Filter by AM"></select><input class="tm-search-mirror" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table-p"></table></div>
       </div>
       <div class="card">
         <h3>Staff cost distribution by shop</h3>
-        <p class="note">每組佔該舖 TM cost 嘅 %：左邊係月初至今（MTD）實數，右邊係全月預計（Projected），每邊幾項加埋 = 100%。用 TM cost by shop 嘅 AM 篩選同搜尋。</p>
+        <p class="note">每組佔該舖 TM cost 嘅 %：左邊係月初至今（MTD）實數，右邊係全月預計（Projected），每邊幾項加埋 = 100%。AM 篩選同搜尋同 TM cost by shop 同步。</p>
+        <div class="ctrl"><select class="tm-am-mirror" aria-label="Filter by AM"></select><input class="tm-search-mirror" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="dist-table"></table></div>
       </div>
       <div class="card" id="tm-daily-card">
@@ -655,6 +657,9 @@
 
   const amSel = $('am-filter'), search = $('search'), tmSearch = $('tm-search'), tmAm = $('tm-am-filter');
   tmAm.addEventListener('change', () => draw());
+  // Mirror AM filter + search on the Projected and distribution tables, kept in sync with the Actual table's (Vivian, 4/11/2026)
+  document.querySelectorAll('.tm-am-mirror').forEach((el) => el.addEventListener('change', () => { tmAm.value = el.value; draw(); }));
+  document.querySelectorAll('.tm-search-mirror').forEach((el) => el.addEventListener('input', () => { tmSearch.value = el.value; draw(); }));
   amSel.addEventListener('change', () => draw());
   search.addEventListener('input', () => draw());
   tmSearch.addEventListener('input', () => draw());
@@ -1085,6 +1090,8 @@
     ((DATA.pos || {}).shops || []).forEach((r) => { if (amOf.has(r.shop_code)) amOf.set(r.shop_code, r.am); });
     const tmAms = [...new Set(amOf.values())].sort(); const pickedAm = tmAm.value;
     if (tmAm.options.length !== tmAms.length + 1) { tmAm.replaceChildren(new Option('All AMs', ''), ...tmAms.map((a) => new Option(a, a))); tmAm.value = pickedAm; }
+    document.querySelectorAll('.tm-am-mirror').forEach((el) => { if (el.options.length !== tmAm.options.length) el.replaceChildren(...[...tmAm.options].map((o) => new Option(o.text, o.value))); el.value = tmAm.value; });
+    document.querySelectorAll('.tm-search-mirror').forEach((el) => { if (el !== document.activeElement) el.value = tmSearch.value; });
     const q = tmSearch.value.trim().toLowerCase();
     const rows = tm.filter((r) => (!tmAm.value || amOf.get(r.shop) === tmAm.value) && (!q || `${r.shop} ${r.shop_name}`.toLowerCase().includes(q))).map((r) => ({ ...r, _am: amOf.get(r.shop) }));
     const sumG = (fn) => { const G = rows.map(fn); const k = (x) => d3.sum(G, (g) => g[x]); return mkG({ mgmt: k('mgmt'), ss: k('ss'), sa: k('sa'), pt: k('pt'), os: k('os'), ot: k('ot'), tr: k('tr') }); };

@@ -290,13 +290,20 @@
     <div class="sec" id="md-body">
       <p class="note" id="md-note"></p>
       <div class="tiles" id="md-kpis"></div>
+      <dl class="defs">
+        <dt>Store GMV</dt><dd>扣咗 manual discount 之後嘅銷售</dd>
+        <dt>Manual discount</dt><dd>人手折扣金額</dd>
+        <dt>MD rate</dt><dd>Manual discount ÷（Store GMV + Manual discount），同 Tableau 計法一樣；<b style="color: var(--bad)">紅色</b> = 高過整體 MD rate 1.5 倍</dd>
+        <dt>Avg MD per shop</dt><dd>Manual discount ÷ 舖數</dd>
+        <dt>Promotion discount</dt><dd>推廣折扣金額</dd>
+        <dt>Net Sale</dt><dd>Store GMV − Promotion discount</dd>
+      </dl>
       <div class="grid">
-        <div class="card"><h3>Manual discount by DM</h3><p class="note">MD rate = Manual discount ÷（Store GMV + Manual discount），同 Tableau 計法一樣。合計用 Σ 計，唔係平均每間舖嘅 %。</p><div class="scroll"><table id="md-dm-table"></table></div></div>
+        <div class="card"><h3>Manual discount by DM</h3><p class="note">DM / AM / Total 嘅 MD rate 用 Σ 計（加埋先除），唔係平均每間舖嘅 %。</p><div class="scroll"><table id="md-dm-table"></table></div></div>
         <div class="card"><h3>Manual discount by AM</h3><p class="note">按 AM 加埋佢管嘅舖。</p><div class="scroll"><table id="md-am-table"></table></div></div>
-        <div class="card"><h3>Manual discount by shop</h3><p class="note">Store GMV 係扣咗 manual discount 之後嘅銷售；Net Sale = Store GMV − Promotion discount。MD rate 高過整體平均 1.5 倍會標紅。</p>
+        <div class="card"><h3>Manual discount by shop</h3><p class="note">可以揀 AM 或者搜尋舖號、舖名。撳欄名可以排序。</p>
           <div class="ctrl"><select id="md-am-filter" aria-label="Filter by AM"></select><input id="md-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="md-table"></table></div></div>
-        <div class="card"><h3>MD rate by shop</h3><p class="note">由高至低排，用同上面個表一樣嘅篩選。虛線 = 整體 MD rate。</p><div class="chart" id="md-chart"></div></div>
       </div>
     </div>
   </section>
@@ -908,7 +915,7 @@
     };
     const rateTone = (v) => v == null || !T.md_rate ? '' : (v > T.md_rate * 1.5 ? 'neg' : '');
     const gCols = (key, label, rows) => [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'gmv', label: 'Store GMV', fmt: fmtN },
-      { key: 'md', label: 'Manual discount', fmt: fmtN }, { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone, bar: { max: d3.max(rows.filter((r) => !r._pin), (r) => r.md_rate || 0) } },
+      { key: 'md', label: 'Manual discount', fmt: fmtN }, { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone },
       { key: 'md_per_shop', label: 'Avg MD per shop', fmt: fmtN }, { key: 'promo', label: 'Promotion discount', fmt: fmtN }, { key: 'net_sale', label: 'Net Sale', fmt: fmtN }, { key: 'qty', label: 'Qty sold', fmt: fmtN }];
     const dm = group('dm'), am = group('am');
     drawTable($('md-dm-table'), dm, gCols('dm', 'DM', dm));
@@ -920,12 +927,11 @@
     const tot = { shop_code: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', ...sum(rows) };
     drawTable($('md-table'), rows.concat(rows.length ? [tot] : []), [
       { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: 'am', label: 'AM', cls: 'l', get: (r) => r._pin ? '' : r.am },
+      { key: 'am', label: 'AM', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.am },
       { key: 'gmv', label: 'Store GMV', fmt: fmtN }, { key: 'md', label: 'Manual discount', fmt: fmtN },
-      { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone, bar: { max: d3.max(rows, (r) => r.md_rate || 0) } },
+      { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone },
       { key: 'promo', label: 'Promotion discount', fmt: fmtN }, { key: 'net_sale', label: 'Net Sale', fmt: fmtN }, { key: 'qty', label: 'Qty sold', fmt: fmtN },
     ]);
-    drawRate($('md-chart'), rows, T.md_rate);
   }
 
 

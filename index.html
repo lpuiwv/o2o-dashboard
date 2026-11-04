@@ -134,6 +134,9 @@
     <button role="tab" id="tab-pos" data-tab="pos" aria-selected="false">POS achievement</button>
     <button role="tab" id="tab-discount" data-tab="discount" aria-selected="false">Manual Discount</button>
     <button role="tab" id="tab-disposal" data-tab="disposal" aria-selected="false">Disposal</button>
+    <button role="tab" id="tab-pickup" data-tab="pickup" aria-selected="false">Pickup</button>
+    <button role="tab" id="tab-umss" data-tab="umss" aria-selected="false">UM/SS KPI</button>
+    <button role="tab" id="tab-offline" data-tab="offline" aria-selected="false">POS offline</button>
     <span class="tierbox" id="tier-bar"><label class="note" for="tier-filter">Shop tier 篩選</label>
     <select id="tier-filter" aria-label="Filter by shop tier"><option value="">All tiers</option></select></span>
   </nav>
@@ -328,18 +331,77 @@
       </div>
     </div>
   </section>
+
+  <!-- Pickup (Tableau "Shop Pick-up", copied into the POS sheet by the 09:52 task; Vivian, 4/11/2026) -->
+  <section class="pane" id="pickup" role="tabpanel" aria-labelledby="tab-pickup" hidden>
+    <div class="stamp" id="stamp-pickup"></div>
+    <div class="wait" id="pu-missing" hidden>
+      <h2>Pickup</h2>
+      <p>未有 Pickup 數據。每日上午約 9:52 會由 Tableau「Shop Pick-up」抄去 O2O POS Target (Tableau) Google Sheet 嘅「Pickup by shop」tab，之後 dashboard 更新就會見到。</p>
+    </div>
+    <div class="sec" id="pu-body">
+      <p class="note" id="pu-note"></p>
+      <div class="tiles" id="pu-kpis"></div>
+      <dl class="defs">
+        <dt>Pick-up Target</dt><dd>全月 pickup GMV target</dd>
+        <dt>Total Pick-up GMV</dt><dd>Non senior + Senior (webcart) + Senior (non-webcart)，月初至今</dd>
+        <dt>Current ach.</dt><dd>Total Pick-up GMV ÷ Target</dd>
+        <dt>Projected</dt><dd>按月初至今推算全月；Projected ach. = Projected GMV ÷ Target，<b style="color: var(--good)">綠色</b> = 預計達標，<b style="color: var(--bad)">紅色</b> = 低過 80%</dd>
+      </dl>
+      <div class="grid">
+        <div class="card"><h3>Pickup by DM</h3><p class="note">合計用 Σ 計（加埋先除）。</p><div class="scroll"><table id="pu-dm-table"></table></div></div>
+        <div class="card"><h3>Pickup by AM</h3><p class="note">按 AM 加埋佢管嘅舖。</p><div class="scroll"><table id="pu-am-table"></table></div></div>
+        <div class="card"><h3>Pickup by shop</h3><p class="note">可以揀 AM 或者搜尋舖號、舖名。撳欄名可以排序。</p>
+          <div class="ctrl"><select id="pu-am-filter" aria-label="Filter by AM"></select><input id="pu-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
+          <div class="scroll"><table id="pu-table"></table></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- UM/SS KPI: one row per UM / SS for DM / AM to screenshot and share (Vivian, 4/11/2026) -->
+  <section class="pane" id="umss" role="tabpanel" aria-labelledby="tab-umss" hidden>
+    <div class="sec">
+      <div class="ctrl"><select id="um-dm-filter" aria-label="Filter by DM"></select><select id="um-am-filter" aria-label="Filter by AM"></select></div>
+      <div class="card shot">
+        <h3 id="um-title">UM / SS KPI</h3>
+        <p class="note" id="um-note"></p>
+        <div class="scroll"><table id="um-table"></table></div>
+        <dl class="defs">
+          <dt>Disposal rate</dt><dd>Total Disposal ÷ Related SKU GMV（Tableau，未扣 supplier claim）</dd>
+          <dt>Fruit discount</dt><dd>生果類（POS Cat = Fruits）manual discount 金額；Fruit disc. % = Fruit discount ÷（Fruit GMV + Fruit discount）</dd>
+          <dt>TM %</dt><dd>TM cost ÷（POS GPA + Pickup GPA）；<b style="color: var(--bad)">紅色</b> = Projected 高過 target</dd>
+          <dt>POS / Pickup</dt><dd>Proj. ach. = 預計全月 GMV ÷ target；<b style="color: var(--good)">綠色</b> = 預計達標，<b style="color: var(--bad)">紅色</b> = 低過 80%</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- POS offline: shop x SKU sales from the PED 'Overall Summary' sheet, for DM / AM to download (Vivian, 4/11/2026) -->
+  <section class="pane" id="offline" role="tabpanel" aria-labelledby="tab-offline" hidden>
+    <div class="sec">
+      <p class="note" id="off-note">載入緊……</p>
+      <div class="ctrl"><select id="off-dm" aria-label="Filter by DM"></select><select id="off-am" aria-label="Filter by AM"></select><select id="off-um" aria-label="Filter by UM / SS"></select><select id="off-shop" aria-label="Filter by shop"></select><select id="off-cat" aria-label="Filter by POS category"></select><input id="off-search" type="search" placeholder="搜尋 SKU 或貨品名" aria-label="Search SKU"></div>
+      <div class="tiles" id="off-kpis"></div>
+      <div class="grid">
+        <div class="card"><h3>By shop by SKU sales — 下載</h3><p class="note" id="off-dl-note"></p>
+          <div class="dl-row"><button type="button" class="dl" id="off-dl">下載 by shop by SKU CSV</button></div></div>
+        <div class="card"><h3>Sales by shop</h3><p class="note">跟上面嘅篩選。撳欄名可以排序。</p><div class="scroll"><table id="off-shop-table"></table></div></div>
+        <div class="card"><h3>Top SKU</h3><p class="note">跟上面嘅篩選，按 GMV 由高至低，最多顯示 200 隻；全部 SKU 請用上面「下載」。</p><div class="scroll"><table id="off-sku-table"></table></div></div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
   const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-  let DATA = null;
+  let DATA = null, PW = null, SKU = null, skuLoading = false;
   let scope = 'ex';
   // Outlet shops and EPR, matching the sheet's 'Excl. Outlet & EPR' summary (SWH and CHE are outlets)
   const EXCLUDED = ['SWH', 'CHE', 'EPR'];
   const sortState = {};
-  const TABS = ['dop', 'tm', 'pos', 'discount', 'disposal'];
+  const TABS = ['dop', 'tm', 'pos', 'discount', 'disposal', 'pickup', 'umss', 'offline'];
 
   async function decrypt(pkg, password) {
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -352,6 +414,7 @@
       const res = await fetch('data.enc.json?t=' + Date.now(), { cache: 'no-store' });
       if (!res.ok) throw new Error('nofile');
       DATA = await decrypt(await res.json(), pw);
+      PW = pw; SKU = null;
       try { sessionStorage.setItem('o2o_pw', pw); } catch (e) {}
       $('lock').hidden = true; $('app').hidden = false;
       showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dop');
@@ -1233,6 +1296,176 @@
     const DP = DATA.disposal || {};
     stamp('stamp-disp', [[L.src + '（Tableau）', '每日上午約 9:00' + (DP.tableau_updated ? `（今次：${DP.tableau_updated}）` : '')], [L.per, DP.period], [L.imp, DP.exported_at], [L.upd, DATA.generated_at]]);
     stamp('stamp-md', [[L.src + '（Tableau）', '每日上午約 9:00' + (M.tableau_updated ? `（今次：${M.tableau_updated}）` : '')], [L.per, M.period], [L.imp, M.exported_at], [L.upd, DATA.generated_at]]);
+    const PU = DATA.pickup || {};
+    stamp('stamp-pickup', [[L.src + '（Tableau）', '每日上午約 9:00'], [L.per, PU.period], [L.imp, PU.exported_at], [L.upd, DATA.generated_at]]);
+  }
+
+
+  // ---------- Pickup (Tableau "Shop Pick-up"; Vivian, 4/11/2026) ----------
+  const puAm = $('pu-am-filter'), puSearch = $('pu-search');
+  puAm.addEventListener('change', () => draw()); puSearch.addEventListener('input', () => draw());
+  const achOf = (gmv, tgt) => tgt ? gmv / tgt : null;
+  function drawPickup() {
+    const P = DATA.pickup;
+    $('pu-missing').hidden = !!P; $('pu-body').hidden = !P;
+    if (!P) return;
+    const all = P.shops.filter((r) => passTier(r.shop_code));
+    const hasT = (r) => r.target != null && r.target > 0;
+    const sm = (rows) => { const t = rows.filter(hasT); const o = { shops: rows.length };
+      ['target', 'non_senior', 'senior_webcart', 'senior_non_webcart', 'pickup_gmv', 'proj_gmv'].forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); });
+      o.current_ach = achOf(d3.sum(t, (r) => r.pickup_gmv || 0), o.target); o.proj_ach = achOf(d3.sum(t, (r) => r.proj_gmv || 0), o.target); return o; };
+    const T = sm(all);
+    $('pu-note').textContent = `來自 Tableau（O2O Report › Shop Pick-up），${P.period || ''}。冇 target 嘅舖唔計入達標 %。`;
+    tiles($('pu-kpis'), [
+      ['Pick-up Target', fmtK(T.target), { hint: '全月' }], ['Total Pick-up GMV', fmtK(T.pickup_gmv), { hint: '月初至今' }],
+      ['Current achievement', fmtP(T.current_ach)], ['Projected Pick-up GMV', fmtK(T.proj_gmv)],
+      ['Projected achievement', fmtP(T.proj_ach), { good: T.proj_ach >= 1, bad: T.proj_ach < 0.8, hint: T.proj_ach >= 1 ? '預計達標' : '預計未達標' }],
+    ]);
+    const nums = [{ key: 'target', label: 'Pick-up Target', fmt: fmtN }, { key: 'non_senior', label: 'Non senior', fmt: fmtN },
+      { key: 'senior_webcart', label: 'Senior (webcart)', fmt: fmtN }, { key: 'senior_non_webcart', label: 'Senior (non-webcart)', fmt: fmtN },
+      { key: 'pickup_gmv', label: 'Total Pick-up GMV', fmt: fmtN }, { key: 'current_ach', label: 'Current ach.', fmt: fmtP },
+      { key: 'proj_gmv', label: 'Projected GMV', fmt: fmtN }, { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls }];
+    const group = (key) => d3.rollups(all, sm, (r) => r[key] || '—').map(([n, o]) => ({ [key]: n, ...o }))
+      .sort((a, b) => String(a[key]).localeCompare(String(b[key]))).concat([{ [key]: 'Total', _pin: true, _cls: 'tot', ...T }]);
+    drawTable($('pu-dm-table'), group('dm'), [{ key: 'dm', label: 'DM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, ...nums]);
+    drawTable($('pu-am-table'), group('am'), [{ key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, ...nums]);
+    const picked = puAm.value; const ams = [...new Set(P.shops.map((r) => r.am))].sort();
+    if (puAm.options.length !== ams.length + 1) { puAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); puAm.value = picked; }
+    const q = puSearch.value.trim().toLowerCase();
+    const rows = all.filter((r) => (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
+    const tot = { shop_code: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', ...sm(rows) };
+    drawTable($('pu-table'), rows.concat(rows.length ? [tot] : []), [{ key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'),
+      { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.am }, ...nums]);
+  }
+
+  // ---------- UM / SS KPI (Vivian, 4/11/2026): one row per UM / SS, for DM / AM to screenshot ----------
+  const umDm = $('um-dm-filter'), umAm = $('um-am-filter');
+  umDm.addEventListener('change', () => { umAm.value = ''; draw(); }); umAm.addEventListener('change', () => draw());
+  function drawUmss() {
+    const T = DATA.tm_target || {}, SP = DATA.tm_target_pct || {}, PED = DATA.ped || {};
+    // Shop → team: TM target tab (DM / AM / UM) first, then POS, Pickup and the PED sheet
+    const team = new Map();
+    const put = (code, o) => { if (!code) return; const t = team.get(code) || {}; ['dm', 'am', 'um'].forEach((k) => { if (!t[k] && o[k]) t[k] = String(o[k]).trim(); }); team.set(code, t); };
+    (T.shops || []).forEach((r) => put(r.shop_code, r));
+    ((DATA.pos || {}).shops || []).forEach((r) => put(r.shop_code, r));
+    ((DATA.pickup || {}).shops || []).forEach((r) => put(r.shop_code, r));
+    Object.entries(PED.um || {}).forEach(([code, um]) => put(code, { um }));
+    const by = (list, key = 'shop_code') => new Map((list || []).map((r) => [r[key], r]));
+    const tm = by(T.shops), pos = by((DATA.pos || {}).shops), pu = by((DATA.pickup || {}).shops), disp = by((DATA.disposal || {}).shops), fruit = PED.fruit || {};
+    const codes = [...team.keys()].filter((c) => team.get(c).um && passTier(c));
+    const dms = [...new Set(codes.map((c) => team.get(c).dm).filter(Boolean))].sort();
+    if (umDm.options.length !== dms.length + 1) { const v = umDm.value; umDm.replaceChildren(new Option('All DMs', ''), ...dms.map((d) => new Option(d, d))); umDm.value = v; }
+    const amList = [...new Set(codes.filter((c) => !umDm.value || team.get(c).dm === umDm.value).map((c) => team.get(c).am).filter(Boolean))].sort();
+    const amKey = amList.join('|');
+    if (umAm.dataset.k !== amKey) { const v = umAm.value; umAm.replaceChildren(new Option('All AMs', ''), ...amList.map((a) => new Option(a, a))); umAm.value = amList.includes(v) ? v : ''; umAm.dataset.k = amKey; }
+    const inScope = codes.filter((c) => (!umDm.value || team.get(c).dm === umDm.value) && (!umAm.value || team.get(c).am === umAm.value));
+    const agg = (cs) => {
+      const o = { shops: cs.length };
+      const S = (m, k, f = (r) => r[k]) => d3.sum(cs, (c) => { const r = m.get(c); return r ? (f(r) || 0) : 0; });
+      const dg = S(disp, 'sku_gmv'); o.disp_rate = dg ? S(disp, 'total') / dg : null;
+      const fd = d3.sum(cs, (c) => (fruit[c] || {}).disc || 0), fg = d3.sum(cs, (c) => (fruit[c] || {}).gmv || 0);
+      o.fruit_disc = PED.fruit ? fd : null; o.fruit_rate = PED.fruit && (fg + fd) ? fd / (fg + fd) : null;
+      const g = S(tm, 'gpa'), pg = S(tm, 'proj_gpa');
+      o.tm_a = g ? S(tm, 'tm') / g : null; o.tm_p = pg ? S(tm, 'proj_tm') / pg : null;
+      const tt = S(tm, 'target_tm'), tgpa = S(tm, null, (r) => r.target_tm && r.target_pct ? r.target_tm / r.target_pct : 0);
+      o.tm_t = tgpa ? tt / tgpa : null;
+      const posT = cs.filter((c) => (pos.get(c) || {}).target > 0);
+      o.pos_gmv = S(pos, 'pos_gmv'); o.pos_target = d3.sum(posT, (c) => pos.get(c).target);
+      o.pos_ach = o.pos_target ? d3.sum(posT, (c) => pos.get(c).proj_gmv || 0) / o.pos_target : null;
+      const puT = cs.filter((c) => (pu.get(c) || {}).target > 0);
+      o.pu_gmv = S(pu, 'pickup_gmv'); o.pu_target = d3.sum(puT, (c) => pu.get(c).target);
+      o.pu_ach = o.pu_target ? d3.sum(puT, (c) => pu.get(c).proj_gmv || 0) / o.pu_target : null;
+      return o;
+    };
+    const rows = d3.groups(inScope, (c) => team.get(c).um).map(([um, cs]) => {
+      const t = team.get(cs[0]); const o = { um, am: t.am, dm: t.dm, ...agg(cs) };
+      if (!document.getElementById('tier-filter').value && SP.um && SP.um[um] != null) o.tm_t = SP.um[um];  // UM target % from the target tab's pivot (I:L)
+      return o;
+    }).sort((a, b) => String(a.dm).localeCompare(String(b.dm)) || String(a.am).localeCompare(String(b.am)) || String(a.um).localeCompare(String(b.um)));
+    const tot = { um: 'Total', am: '', _pin: true, _cls: 'tot', ...agg(inScope) };
+    const SPk = umAm.value ? ['am', umAm.value] : umDm.value ? ['dm', umDm.value] : ['total'];
+    if (!document.getElementById('tier-filter').value && SP[SPk[0]] != null) { const v = SPk[0] === 'total' ? SP.total : SP[SPk[0]][SPk[1]]; if (v != null) tot.tm_t = v; }
+    const tmTone = (r) => r.tm_p == null || r.tm_t == null ? '' : (r.tm_p > r.tm_t ? 'neg' : 'pos');
+    const scope = umAm.value || umDm.value || 'All';
+    $('um-title').textContent = `UM / SS KPI — ${scope}（${DATA.month || ''}）`;
+    const per = [(DATA.pos || {}).period && `POS ${DATA.pos.period}`, (DATA.pickup || {}).period && `Pickup ${DATA.pickup.period}`,
+      (DATA.disposal || {}).period && `Disposal ${DATA.disposal.period}`, PED.as_of && `Fruit discount ${PED.as_of}`, T.to && `TM cost 計到 ${T.to}`].filter(Boolean).join('；');
+    $('um-note').textContent = `${per}。Dashboard 更新：${DATA.generated_at}。` + (PED.fruit ? '' : ' Fruit discount 未有數（PED sheet 未分享畀 dashboard）。');
+    drawTable($('um-table'), rows.concat(rows.length ? [tot] : []), [
+      { key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'shops', label: 'Shops', fmt: fmtN },
+      { key: 'disp_rate', label: 'Disposal rate', fmt: fmtP },
+      { key: 'fruit_disc', label: 'Fruit discount', fmt: fmtN }, { key: 'fruit_rate', label: 'Fruit disc. %', fmt: fmtP },
+      { key: 'tm_a', label: 'TM % (MTD)', fmt: fmtP }, { key: 'tm_p', label: 'TM % (Proj.)', fmt: fmtP, tone: (v) => '', get: (r) => r.tm_p },
+      { key: 'tm_t', label: 'TM target %', fmt: fmtP },
+      { key: 'pos_gmv', label: 'POS GMV (MTD)', fmt: fmtN }, { key: 'pos_target', label: 'POS target', fmt: fmtN }, { key: 'pos_ach', label: 'POS proj. ach.', fmt: fmtP, tone: achCls },
+      { key: 'pu_gmv', label: 'Pickup GMV (MTD)', fmt: fmtN }, { key: 'pu_target', label: 'Pickup target', fmt: fmtN }, { key: 'pu_ach', label: 'Pickup proj. ach.', fmt: fmtP, tone: achCls },
+    ]);
+    // colour TM % (Proj.) against each row's own target (tone() only sees the value)
+    const ci = [...$('um-table').querySelectorAll('thead th')].findIndex((th) => th.textContent.startsWith('TM % (Proj.)'));
+    const shown = $('um-table')._export.rows;
+    $('um-table').querySelectorAll('tbody tr').forEach((tr, i) => { const k = tmTone(shown[i]); if (k && tr.children[ci]) tr.children[ci].classList.add(k); });
+  }
+
+  // ---------- POS offline: shop x SKU sales (PED 'Overall Summary'), loaded on demand (Vivian, 4/11/2026) ----------
+  const offSel = ['off-dm', 'off-am', 'off-um', 'off-shop', 'off-cat'].map($);
+  offSel.forEach((el) => el.addEventListener('change', () => draw())); $('off-search').addEventListener('input', () => draw());
+  async function loadSku() {
+    if (SKU || skuLoading) return; skuLoading = true;
+    try {
+      const res = await fetch('sku.enc.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('nofile');
+      SKU = await decrypt(await res.json(), PW);
+    } catch (e) { SKU = { error: true }; }
+    skuLoading = false; if (current === 'offline') draw();
+  }
+  function offRows() {
+    const S = SKU, idx = Object.fromEntries(S.cols.map((c, i) => [c, i]));
+    const names = Object.fromEntries(((DATA.pos || {}).shops || []).map((r) => [r.shop_code, r.shop_name]));
+    return S.rows.map((r) => { const shop = r[idx.shop], t = S.teams[shop] || [], o = { shop, dm: t[0] || '', am: t[1] || '', um: S.um[shop] || '', shop_name: names[shop] || '', sku: r[idx.sku], name: S.names[r[idx.sku]] || '' };
+      ['cat', 'gmv', 'qty', 'disc', 'disp_qty', 'disp_cost'].forEach((k) => { o[k] = r[idx[k]]; }); return o; });
+  }
+  function fillSel(el, list, label) { const v = el.value; const key = list.join('|'); if (el.dataset.k === key) return; el.replaceChildren(new Option(label, ''), ...list.map((x) => new Option(x, x))); el.value = list.includes(v) ? v : ''; el.dataset.k = key; }
+  function drawOffline() {
+    if (!SKU) { $('off-note').textContent = '載入緊 by shop by SKU 數據……'; loadSku(); return; }
+    if (SKU.error) { $('off-note').textContent = '未有 by shop by SKU 數據：要將「PED Disposal+Discount+GP (Disposal bot)」sheet 分享畀 dashboard（Viewer）之後，下次更新先會有。'; return; }
+    const all = offRows().filter((r) => passTier(r.shop));
+    const [fDm, fAm, fUm, fShop, fCat] = offSel;
+    fillSel(fDm, [...new Set(all.map((r) => r.dm).filter(Boolean))].sort(), 'All DMs');
+    const a1 = all.filter((r) => !fDm.value || r.dm === fDm.value); fillSel(fAm, [...new Set(a1.map((r) => r.am).filter(Boolean))].sort(), 'All AMs');
+    const a2 = a1.filter((r) => !fAm.value || r.am === fAm.value); fillSel(fUm, [...new Set(a2.map((r) => r.um).filter(Boolean))].sort(), 'All UM / SS');
+    const a3 = a2.filter((r) => !fUm.value || r.um === fUm.value); fillSel(fShop, [...new Set(a3.map((r) => r.shop))].sort(), 'All shops');
+    const a4 = a3.filter((r) => !fShop.value || r.shop === fShop.value); fillSel(fCat, [...new Set(a4.map((r) => r.cat).filter(Boolean))].sort(), 'All categories');
+    const q = $('off-search').value.trim().toLowerCase();
+    const rows = a4.filter((r) => (!fCat.value || r.cat === fCat.value) && (!q || `${r.sku} ${r.name}`.toLowerCase().includes(q)));
+    $('off-note').textContent = `來自「PED Disposal+Discount+GP (Disposal bot)」sheet 嘅 Overall Summary（每日 12:45 更新，數據計到尋日）${SKU.as_of ? '，' + SKU.as_of : ''}。GMV = Tableau Promotion Report（Total Price + MKT Fund + RM Discount）；Discount = manual discount；Disposal cost 未扣 supplier claim。`;
+    const sm = (k) => d3.sum(rows, (r) => r[k] || 0);
+    tiles($('off-kpis'), [['GMV', fmtK(sm('gmv')), { hint: '月初至今' }], ['Qty sold', fmtK(sm('qty'))], ['Manual discount', fmtK(sm('disc'))],
+      ['Disposal cost', fmtK(sm('disp_cost'))], ['SKU', fmtN(new Set(rows.map((r) => r.sku)).size), { hint: `${new Set(rows.map((r) => r.shop)).size} 間舖` }]]);
+    $('off-dl-note').textContent = `會下載而家篩選緊嘅 ${fmtN(rows.length)} 行（每間舖每隻 SKU 一行）。可以喺上面揀 DM / AM / UM / 舖 / 類別再下載。`;
+    $('off-dl').onclick = () => {
+      const cols = [['dm', 'DM'], ['am', 'AM'], ['um', 'UM / SS'], ['shop', 'Shop code'], ['shop_name', 'Shop name'], ['sku', 'SKU'], ['name', 'SKU name'], ['cat', 'POS Cat'],
+        ['gmv', 'GMV'], ['qty', 'Qty'], ['disc', 'Manual discount'], ['disp_qty', 'Disposal qty'], ['disp_cost', 'Disposal cost']];
+      const esc = (x) => { x = x == null ? '' : String(x); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+      const lines = [cols.map((c) => c[1]).join(','), ...rows.map((r) => cols.map((c) => esc(r[c[0]])).join(','))];
+      const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const scope = [fDm.value, fAm.value, fUm.value, fShop.value, fCat.value].filter(Boolean).join(' ') || 'All';
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `O2O POS offline by shop by SKU - ${scope.replace(/[\\/:*?"<>|]+/g, ' ')} (${(DATA.generated_at || '').slice(0, 10)}).csv`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    };
+    const nums = [{ key: 'gmv', label: 'GMV', fmt: fmtN }, { key: 'qty', label: 'Qty', fmt: fmtN }, { key: 'disc', label: 'Manual discount', fmt: fmtN },
+      { key: 'disp_qty', label: 'Disposal qty', fmt: fmtN }, { key: 'disp_cost', label: 'Disposal cost', fmt: fmtN }];
+    const byShop = d3.rollups(rows, (v) => ({ dm: v[0].dm, am: v[0].am, um: v[0].um, shop_name: v[0].shop_name, skus: new Set(v.map((r) => r.sku)).size,
+      ...Object.fromEntries(['gmv', 'qty', 'disc', 'disp_qty', 'disp_cost'].map((k) => [k, d3.sum(v, (r) => r[k] || 0)])) }), (r) => r.shop)
+      .map(([shop, o]) => ({ shop, ...o })).sort((a, b) => b.gmv - a.gmv);
+    const tot = { shop: 'Total', shop_name: `${byShop.length} 間舖`, _pin: true, _cls: 'tot', skus: new Set(rows.map((r) => r.sku)).size,
+      ...Object.fromEntries(['gmv', 'qty', 'disc', 'disp_qty', 'disp_cost'].map((k) => [k, sm(k)])) };
+    drawTable($('off-shop-table'), byShop.concat(byShop.length ? [tot] : []), [{ key: 'shop', label: 'Shop', freeze: true }, { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+      { key: 'am', label: 'AM', cls: 'l' }, { key: 'um', label: 'UM / SS', cls: 'l' }, { key: 'skus', label: 'SKU', fmt: fmtN }, ...nums]);
+    const bySku = d3.rollups(rows, (v) => ({ name: v[0].name, cat: v[0].cat, shops: new Set(v.map((r) => r.shop)).size,
+      ...Object.fromEntries(['gmv', 'qty', 'disc', 'disp_qty', 'disp_cost'].map((k) => [k, d3.sum(v, (r) => r[k] || 0)])) }), (r) => r.sku)
+      .map(([sku, o]) => ({ sku, ...o })).sort((a, b) => b.gmv - a.gmv).slice(0, 200);
+    drawTable($('off-sku-table'), bySku, [{ key: 'sku', label: 'SKU', freeze: true }, { key: 'name', label: 'SKU name', cls: 'l', freeze: true }, { key: 'cat', label: 'POS Cat', cls: 'l' },
+      { key: 'shops', label: 'Shops', fmt: fmtN }, ...nums]);
   }
 
   function draw() {
@@ -1248,6 +1481,9 @@
     if (current === 'pos') drawPos();
     if (current === 'discount') drawMd();
     if (current === 'disposal') drawDisposal();
+    if (current === 'pickup') drawPickup();
+    if (current === 'umss') drawUmss();
+    if (current === 'offline') drawOffline();
   }
   let rT; window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(draw, 150); });
 })();

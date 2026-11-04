@@ -26,6 +26,7 @@ TM_SHEET = "1AnaHxF1yKUWAAVqy77PkYb4fWdVxcSdZ1bwdByHmNJk"   # All Shop Daily TM 
 TIER_SHEET = "1YFEdwrN9E8LQlB63hWZU6kWg_99wUjmxP_kUsKmZQvg"  # Tier of shop (by target): Code / Shop Name / Tier
 TARGET_SHEET = "1NjGFRTCmTU_0-9vvoIXFYVSVocJ4_0Fyhjbe-8qWNA8"  # O2O Shop Target 2026 Final_For PED OPS: "<Mon> TM cost target" (Vivian, 2/11/2026)
 POS_SHEET = "1AZBZXU_dbRvTdUaE-J0WVcM62ZFkMTMOhsARdSNiyec"  # O2O POS Target (Tableau) - copy of Tableau crosstabs
+PED_SHEET = "13N3VxU3CzrE8vs_rFSkEC41yAQj8ZdbhVOTZKrt4x9o"  # PED Disposal+Discount+GP (Disposal bot): 'Overall Summary' shop x SKU MTD (Vivian, 4/11/2026)
 ITERATIONS = 250_000
 ROOT = Path(__file__).resolve().parent
 HKT = ZoneInfo("Asia/Hong_Kong")
@@ -294,6 +295,80 @@ def fetch_disposal(get):
     except Exception as e:
         print(f"Disposal tab not read: {e}", file=sys.stderr)
         return None
+
+
+PICKUP_COLS = ["dm", "am", "shop_code", "shop_name", "target", "non_senior", "senior_webcart", "senior_non_webcart",
+               "pickup_gmv", "current_ach", "proj_gmv", "proj_ach"]
+
+
+def fetch_pickup(get):
+    """Shop pick-up GMV vs target, copied from Tableau "Shop Pick-up" into the POS sheet's 'Pickup by shop' tab by the
+    daily scheduled task (Vivian, 4/11/2026). Optional."""
+    try:
+        rows, _ = parse_pos(get(POS_SHEET, "'Pickup by shop'!A1:L200"), PICKUP_COLS, {"dm", "am", "shop_code", "shop_name"})
+        rows = [r for r in rows if r.get("shop_code") and r["shop_code"] != "All"]
+        if not rows:
+            return None
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B24") if r}
+        return {"shops": rows, "period": info.get("Pickup period", ""), "exported_at": info.get("Pickup exported at", "")}
+    except Exception as e:
+        print(f"Pickup tab not read: {e}", file=sys.stderr)
+        return None
+
+
+def fetch_ped(get):
+    """'Overall Summary' of the PED Disposal+Discount+GP sheet (one row per shop x SKU, month to date; pipeline runs
+    daily 12:45 with T-1 data). Returns (summary, sku_payload):
+    summary = {fruit: {shop: {disc, gmv}}, um: {shop: UM}, as_of}; sku_payload = compact shop x SKU rows for the
+    POS offline tab (written to a separate encrypted file, loaded only when that tab opens). Optional."""
+    try:
+        vals = get(PED_SHEET, "'Overall Summary'!A1:AF25000")
+    except Exception as e:
+        print(f"PED Overall Summary not read: {e}", file=sys.stderr)
+        return None, None
+    if not vals:
+        return None, None
+    head = [str(h).strip().lower() for h in vals[0]]
+    col = lambda name: head.index(name) if name in head else None
+    c = {k: col(n) for k, n in (("dm", "dm"), ("am", "am"), ("um", "um / sm"), ("shop", "shop code"), ("sku", "product code"),
+                                ("name", "sku name"), ("cat", "pos cat"), ("gmv", "total pos gmv"), ("qty", "quantity"),
+                                ("disc", "discount amount"), ("disp", "total disposal cost"), ("disp_qty", "total disposal qty"))}
+    if c["shop"] is None or c["sku"] is None:
+        return None, None
+    g = lambda r, k: r[c[k]] if c[k] is not None and c[k] < len(r) else ""
+    fruit, um, names, rows = {}, {}, {}, []
+    for r in vals[1:]:
+        shop, sku = str(g(r, "shop")).strip(), str(g(r, "sku")).strip()
+        if not shop or not sku:
+            continue
+        cat = str(g(r, "cat")).strip()
+        gmv, qty, disc = num(g(r, "gmv")) or 0, num(g(r, "qty")) or 0, num(g(r, "disc")) or 0
+        disp, dq = abs(num(g(r, "disp")) or 0), abs(num(g(r, "disp_qty")) or 0)
+        if str(g(r, "um")).strip():
+            um.setdefault(shop, str(g(r, "um")).replace("\t", "").strip())
+        if cat.lower().startswith("fruit"):
+            f = fruit.setdefault(shop, {"disc": 0, "gmv": 0})
+            f["disc"] += disc
+            f["gmv"] += gmv
+        names.setdefault(sku, str(g(r, "name")).strip())
+        if gmv or qty or disc or disp or dq:
+            rows.append([shop, sku, cat, round(gmv, 2), round(qty, 2), round(disc, 2), round(dq, 2), round(disp, 2)])
+    as_of = ""
+    try:
+        t = get(PED_SHEET, "'Disposal Rate Target'!A10:A10")
+        as_of = str(t[0][0]).strip() if t and t[0] else ""
+    except Exception:
+        pass
+    teams = {}
+    for r in vals[1:]:
+        shop = str(g(r, "shop")).strip()
+        if shop and shop not in teams:
+            teams[shop] = [str(g(r, "dm")).strip(), str(g(r, "am")).strip()]
+    for f in fruit.values():
+        f["disc"], f["gmv"] = round(f["disc"], 2), round(f["gmv"], 2)
+    return ({"fruit": fruit, "um": um, "as_of": as_of},
+            {"cols": ["shop", "sku", "cat", "gmv", "qty", "disc", "disp_qty", "disp_cost"], "rows": rows, "names": names,
+             "teams": teams, "um": um, "as_of": as_of})
 
 
 RED_COLS = ["dm", "am", "shop_code", "sku_id", "sku_name", "mult", "start", "end", "gmv_before", "redemption", "gmv_after"]
@@ -701,6 +776,7 @@ def fetch_all():
                 r[blk]["total"] -= r[blk]["mgmt"]
                 r[blk]["mgmt"] = 0
             r["total_cost"], r["roster_total_cost"] = r["act"]["total"], r["proj"]["total"]
+    ped, sku = fetch_ped(get)
     return {
         "month": raw["_month"],
         "as_of": as_of,
@@ -711,6 +787,8 @@ def fetch_all():
         "md": fetch_md(get),
         "disposal": fetch_disposal(get),
         "redemption": fetch_redemption(get),
+        "pickup": fetch_pickup(get),
+        "ped": ped, "_sku": sku,
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),
@@ -781,9 +859,12 @@ def main():
     if len(password) < 10:
         raise SystemExit("DASH_PASSWORD secret missing or shorter than 10 characters")
     data = fetch_all()
+    sku = data.pop("_sku", None)
     update_history(data, password)
     site = ROOT / "site"
     site.mkdir(exist_ok=True)
+    if sku:  # POS offline shop x SKU rows: own encrypted file, loaded only when that tab opens
+        (site / "sku.enc.json").write_text(json.dumps(encrypt(sku, password)), encoding="utf-8")
     (site / "data.enc.json").write_text(json.dumps(encrypt(data, password)), encoding="utf-8")
     shutil.copy(ROOT / "index.html", site / "index.html")
     shutil.copy(ROOT / "d3.min.js", site / "d3.min.js")

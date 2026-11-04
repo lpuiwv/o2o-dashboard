@@ -1117,7 +1117,7 @@
       { key: 'p_ss_n', label: 'SS/ASS (roster)', fmt: fmtN, get: pv('ss_n') }, { key: 'p_sa_n', label: 'SA (roster)', fmt: fmtN, get: pv('sa_n') },
       { key: 'p_pt_h', label: 'PT hrs (roster)', fmt: fmtH, get: pv('pt_hours') }, { key: 'p_os_h', label: 'OS hrs (schedule)', fmt: fmtH, get: pv('os_hours') },
       ...costCols(gP, '_p'),
-      { key: 'p_total', label: 'Projected TM cost', fmt: fmtN, get: (r) => gP(r).total, bar: { max: d3.max(rows, (r) => grpP(r).total || 0) } },
+      { key: 'p_total', label: 'Projected TM cost', fmt: fmtN, get: (r) => gP(r).total }, // no bar (Vivian, 4/11/2026)
       ...(tgt.size ? [{ key: 'p_tgt', label: 'Target TM cost', fmt: fmtN, get: tgtOf },
         { key: 'p_def', label: 'DEF (target − projection)', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), tone: (v) => v == null ? '' : (v < 0 ? 'neg' : 'pos'), get: (r) => { const t = tgtOf(r); return t == null ? null : t - (r._pin ? r._ptp : gP(r).total); } }] : [])]);
     // Staff cost distribution: MTD and projected side by side

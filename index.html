@@ -33,6 +33,11 @@
   .defs { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 8px 0 4px; font-size: 12px; }
   .defs dt { font-weight: 600; color: var(--fg); margin: 0; }
   .defs dd { color: var(--muted); margin: 0; }
+  table.um-defs { font-size: 12px; margin-top: 10px; }
+  table.um-defs th, table.um-defs td { text-align: left; vertical-align: top; padding: 5px 10px 5px 0; white-space: normal; }
+  table.um-defs td:first-child { font-weight: 600; white-space: nowrap; }
+  table.um-defs td { color: var(--muted); }
+  table.um-defs td:first-child { color: var(--fg); }
   details.src { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
   details.src summary { cursor: pointer; color: var(--accent); }
   details.src ul { margin: 4px 0 0; padding-left: 18px; }
@@ -366,12 +371,7 @@
         <h3 id="um-title">UM / SS KPI</h3>
         <p class="note" id="um-note"></p>
         <div class="scroll"><table id="um-table"></table></div>
-        <dl class="defs">
-          <dt>Disposal rate</dt><dd>Total Disposal ÷ Related SKU GMV（Tableau，未扣 supplier claim）</dd>
-          <dt>Fruit discount</dt><dd>生果類（POS Cat = Fruits）manual discount 金額；Fruit disc. % = Fruit discount ÷（Fruit GMV + Fruit discount）</dd>
-          <dt>TM %</dt><dd>TM cost ÷（POS GPA + Pickup GPA）；<b style="color: var(--bad)">紅色</b> = Projected 高過 target</dd>
-          <dt>POS / Pickup</dt><dd>Proj. ach. = 預計全月 GMV ÷ target；<b style="color: var(--good)">綠色</b> = 預計達標，<b style="color: var(--bad)">紅色</b> = 低過 80%</dd>
-        </dl>
+        <div class="scroll"><table class="um-defs" id="um-defs"></table></div>
       </div>
     </div>
   </section>
@@ -1388,14 +1388,26 @@
     const tmTone = (r) => r.tm_p == null || r.tm_t == null ? '' : (r.tm_p > r.tm_t ? 'neg' : 'pos');
     const scope = umAm.value || umDm.value || 'All';
     $('um-title').textContent = `UM / SS KPI — ${scope}（${DATA.month || ''}）`;
-    const per = [(DATA.pos || {}).period && `POS ${DATA.pos.period}`, (DATA.pickup || {}).period && `Pickup ${DATA.pickup.period}`,
-      (DATA.disposal || {}).period && `Disposal ${DATA.disposal.period}`, PED.as_of && `Fruit discount ${PED.as_of}`, T.to && `TM cost 計到 ${T.to}`].filter(Boolean).join('；');
-    $('um-note').textContent = `${per}。Dashboard 更新：${DATA.generated_at}。` + (PED.fruit ? '' : ' Fruit discount 未有數（PED sheet 未分享畀 dashboard）。');
+    $('um-note').textContent = `每個 UM / SS 一行，計佢負責嘅舖（UM / SS 跟「${(DATA.month || '').split(' ')[0].slice(0, 3)} TM cost target」tab）。最底 Total = 上面全部 UM / SS 加埋，% 用加埋先除。Dashboard 更新：${DATA.generated_at}。`;
+    const G = '<b style="color: var(--good)">綠色</b>', R = '<b style="color: var(--bad)">紅色</b>';
+    const esc = (x) => String(x || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const defs = [
+      ['KPI', '點計', '數據來源 / 期間', '顏色'],
+      ['Disposal rate', 'Total Disposal ÷ Related SKU GMV（越低越好）', `Tableau Shop View (Disposal)，${esc((DATA.disposal || {}).period) || '—'}；未扣 supplier claim`, '—'],
+      ['Fruit discount', '生果類（POS Cat = Fruits）manual discount 金額；Fruit disc. % = Fruit discount ÷（Fruit GMV + Fruit discount）（越低越好）',
+        PED.fruit ? `PED Disposal sheet「Overall Summary」${PED.as_of ? '，' + esc(PED.as_of) : ''}` : '未有數（PED sheet 未讀到）', '—'],
+      ['TM %', 'TM cost ÷（POS GPA + Pickup GPA）（越低越好）。MTD = 月初至今實際；Proj. = 全月預計；TM target % = 該 UM / SS 嘅 target',
+        `TM cost sheet + DOP Raw，計到 ${esc(T.to) || '—'}；target 來自 O2O Shop Target 2026`, `TM % (Proj.)：${R} = 高過 target，${G} = 未超 target`],
+      ['POS', 'POS GMV (MTD) = 月初至今；POS target = 全月；POS proj. ach. = 預計全月 GMV ÷ target（越高越好）', `Tableau POS (pospay Delivery and POS)，${esc((DATA.pos || {}).period) || '—'}`, `${G} = 預計達標（≥ 100%），${R} = 低過 80%`],
+      ['Pickup', 'Pickup GMV (MTD) = 月初至今；Pickup target = 全月；Pickup proj. ach. = 預計全月 GMV ÷ target（越高越好）', `Tableau Shop Pick-up，${esc((DATA.pickup || {}).period) || '—'}`, `${G} = 預計達標（≥ 100%），${R} = 低過 80%`],
+    ];
+    $('um-defs').innerHTML = `<thead><tr>${defs[0].map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${defs.slice(1).map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`
+      + `<tfoot><tr><td colspan="4" style="font-weight: 400; color: var(--muted); white-space: normal">冇 target 嘅舖唔計入達標 % 同 target。揀咗 Shop tier 時，TM target % 改用該批舖嘅 target 加埋計。</td></tr></tfoot>`;
     drawTable($('um-table'), rows.concat(rows.length ? [tot] : []), [
       { key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'shops', label: 'Shops', fmt: fmtN },
       { key: 'disp_rate', label: 'Disposal rate', fmt: fmtP },
       { key: 'fruit_disc', label: 'Fruit discount', fmt: fmtN }, { key: 'fruit_rate', label: 'Fruit disc. %', fmt: fmtP },
-      { key: 'tm_a', label: 'TM % (MTD)', fmt: fmtP }, { key: 'tm_p', label: 'TM % (Proj.)', fmt: fmtP, tone: (v) => '', get: (r) => r.tm_p },
+      { key: 'tm_a', label: 'TM % (MTD)', fmt: fmtP }, { key: 'tm_p', label: 'TM % (Proj.)', fmt: fmtP },
       { key: 'tm_t', label: 'TM target %', fmt: fmtP },
       { key: 'pos_gmv', label: 'POS GMV (MTD)', fmt: fmtN }, { key: 'pos_target', label: 'POS target', fmt: fmtN }, { key: 'pos_ach', label: 'POS proj. ach.', fmt: fmtP, tone: achCls },
       { key: 'pu_gmv', label: 'Pickup GMV (MTD)', fmt: fmtN }, { key: 'pu_target', label: 'Pickup target', fmt: fmtN }, { key: 'pu_ach', label: 'Pickup proj. ach.', fmt: fmtP, tone: achCls },

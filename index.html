@@ -755,7 +755,7 @@
     else if (detail) c.push({ key: 'takeaway_gmv', label: 'Takeaway', fmt: fmtN }, { key: 'delivery_gmv', label: 'Delivery webcart', fmt: fmtN }, { key: 'liteapp_gmv', label: 'Lite app webcart', fmt: fmtN });
     document.querySelectorAll('.pos-formula').forEach((el) => { el.textContent = (DATA.pos || {}).layout === 'nov' ? '由 11 月起跟 Tableau 新計法：Total POS GMV = POS Takeaway GMV（包 MKT fund 同 RM discount）+ POS Delivery GMV + Frozen SKU GMV（x1.5）+ Redemption（x1.2 / x1.5）；webcart 唔再 x2。' : 'Takeaway GMV 包 MKT fund 同 RM discount。'; });
     c.push({ key: 'pos_gmv', label: 'Total POS GMV', fmt: fmtN }, { key: 'current_ach', label: 'Current ach.', fmt: fmtP },
-      { key: 'proj_gmv', label: 'Projected GMV', fmt: fmtN }, { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls, bar: { max, tone: true } });
+      { key: 'proj_gmv', label: 'Projected GMV', fmt: fmtN }, { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls }); // no bar (Vivian, 4/11/2026)
     return c;
   }
 
@@ -807,7 +807,7 @@
       const max = d3.max(rows.filter((r) => !r._pin), (r) => r.proj_ach || 0) || 0;
       return [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'target', label: 'Target', fmt: fmtN }, { key: 'pos_gmv', label: 'Total POS GMV', fmt: fmtN },
         { key: 'current_ach', label: 'Current ach.', fmt: fmtP }, { key: 'proj_gmv', label: 'Projected GMV', fmt: fmtN },
-        { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls, bar: { max, tone: true } },
+        { key: 'proj_ach', label: 'Projected ach.', fmt: fmtP, tone: achCls },
         { key: 'gap', label: 'Projected vs target', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true }];
     };
     const dmRows = group('dm'), amRows = group('am');
@@ -841,7 +841,7 @@
       { key: 'sku_id', label: 'SKU', freeze: true }, { key: 'sku_name', label: 'SKU name', cls: 'l', freeze: true },
       { key: 'mult', label: 'Multiplier', get: (r) => r._pin ? '' : (String(r.mult).includes('/') ? r.mult : multTxt(r.mult)) }, { key: 'period', label: 'Promotion period', cls: 'l' },
       { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'gmv_before', label: 'GMV (before x1.2 & x1.5)', fmt: fmtN },
-      { key: 'redemption', label: 'Redemption amount', fmt: fmtN, bar: { max: maxRed } }, { key: 'gmv_after', label: 'GMV (after x1.2 & x1.5)', fmt: fmtN },
+      { key: 'redemption', label: 'Redemption amount', fmt: fmtN }, { key: 'gmv_after', label: 'GMV (after x1.2 & x1.5)', fmt: fmtN },
       { key: '_share', label: 'Share', fmt: fmtP, get: share },
     ]);
     const pickedAm = redAm.value, pickedSku = redSku.value;

@@ -174,8 +174,8 @@
         </div>
       </div>
       <div class="stack">
-        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − 前線 TM、office、disposal、租金、營運、倉庫及物流、capex 同 marketing 成本。100% commission target 同 commission 級別來自「（月份）Target %」tab；Commission now = Target tab 預計 DOP 做到嘅最高級別（低過 50% 級別即 0%）。Projected DOP、達標 % 同差距來自 Target tab（唔計 outlet，用 Target tab 自己嘅日數推算）。</p><div class="scroll"><table id="dm-table"></table></div></div>
-        <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × 當月日數 ÷ 已有 POS 銷售嘅日數，同 Sheet 一樣。DOP ach. % 跟 Target tab 計法：預計 DOP ÷ target；target 係負數時用 target ÷ 預計 DOP。</p><div class="scroll"><table id="am-table"></table></div></div>
+        <div class="card"><h3>DM summary</h3><p class="note">DOP = POS GPA + pickup GPA − 前線 TM、office、disposal、租金、營運、倉庫及物流、capex 同 marketing 成本。<b>Commission % 跟「<span class="comm-tab"></span>」tab</b>：睇 Proj. DOP 做到邊個級別（120%、110%、100% … 50%），取最高嗰級；低過 50% 級別即 0%。100% commission target = 嗰個 tab 嘅 100% 級別。Proj. DOP 唔計 outlet（SWH、CHE）同 EPR；Diff. to target = Proj. DOP − 100% target。</p><div class="scroll"><table id="dm-table"></table></div></div>
+        <div class="card"><h3>AM summary</h3><p class="note">Projected DOP = DOP × 當月日數 ÷ 已有 POS 銷售嘅日數，同 Sheet 一樣。Commission % 同 DM 一樣，跟「<span class="comm-tab"></span>」tab 嘅級別計。</p><div class="scroll"><table id="am-table"></table></div></div>
         <div class="card"><h3>Shop count by DM and AM</h3><p class="note">而家範圍內嘅舖數，同預計月底 DOP 係正數嘅舖數。</p><div class="scroll"><table id="count-table"></table></div></div>
       </div>
     </div>
@@ -549,9 +549,9 @@
     const T = (r) => (tgt && tgt.get(r[k])) || {};
     const extra = tgt ? [
       { key: 't_target', label: '100% commission target', fmt: fmtN, sign: true, get: (r) => r._pin ? (T(r).target ?? null) : (mode === 'avg' ? (T(r).target ?? null) : (commissionTarget(r[k]) ?? T(r).target ?? null)) },
-      { key: 't_comm', label: 'Commission now', fmt: (v) => v == null ? '' : d3.format('.0%')(v), tone: (v) => v == null ? '' : (v >= 1 ? 'pos' : (v === 0 ? 'neg' : '')), get: (r) => r._pin ? null : commissionNow(r[k], T(r).proj_full ?? r._proj_full) },
       { key: 't_proj', label: 'Proj. DOP', fmt: fmtN, sign: true, get: (r) => T(r).proj_dop ?? null },
-      { key: 't_ach', label: 'DOP ach. %', fmt: fmtP, tone: achCls, get: (r) => T(r).achievement ?? null },
+      // Commission % from the "<Mon> Target %" tab: highest level whose DOP the projected DOP reaches (Vivian, 4/11/2026)
+      { key: 't_comm', label: 'Commission %', fmt: (v) => v == null ? '' : d3.format('.0%')(v), tone: (v) => v == null ? '' : (v >= 1 ? 'pos' : (v === 0 ? 'neg' : '')), get: (r) => r._pin ? null : commissionNow(r[k], T(r).proj_full ?? r._proj_full) },
       { key: 't_diff', label: 'Diff. to target', fmt: fmtN, sign: true, get: (r) => T(r).difference ?? null },
     ] : [];
     return [{ key: k, label, freeze: true }, ...extra, { key: 'pos_gmv', label: 'POS GMV', fmt: fmtN }, { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'gp_pct', label: 'GP%', fmt: fmtP }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN }, { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'other', label: 'Other costs', fmt: fmtN, get: (r) => ['office_cost', 'disposal_cost', 'rental_cost', 'operating_cost', 'wh_log_cost', 'capex', 'mkt_cost'].reduce((t, c) => t + (r[c] || 0), 0) }, { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true }];
@@ -1487,6 +1487,7 @@
     if (tierSel.options.length !== tiers.length + 2) { const v = tierSel.value; tierSel.replaceChildren(new Option('All tiers', ''), ...tiers.map((x) => new Option(x, x)), new Option('No tier', 'No tier')); tierSel.value = v; }
     document.getElementById('tier-bar').hidden = !tiers.length;
     document.getElementById('tier-note').hidden = !tierSel.value; document.getElementById('tier-note').textContent = tierSel.value ? 'Tier 篩選會套用喺所有舖嘅表、圖、舖數、TM cost 同 POS 數字。DM / AM summary、DOP 頂部數字仍然係 Sheet 嘅全部舖合計。' : '';
+    document.querySelectorAll('.comm-tab').forEach((el) => { el.textContent = `${(DATA.month || '').split(' ')[0].slice(0, 3)} Target %`; });
     $('updated').textContent = `${DATA.month} · ${DATA.generated_at} 由 DOP 同 TM cost Google Sheet 更新`;
     if (current === 'dop') drawDop();
     if (current === 'tm') { drawTm(); drawTmTarget(); }

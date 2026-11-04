@@ -137,11 +137,11 @@
     <button role="tab" id="tab-dop" data-tab="dop" aria-selected="true">DOP</button>
     <button role="tab" id="tab-tm" data-tab="tm" aria-selected="false">TM cost</button>
     <button role="tab" id="tab-pos" data-tab="pos" aria-selected="false">POS achievement</button>
+    <button role="tab" id="tab-pickup" data-tab="pickup" aria-selected="false">Pickup achievement</button>
+    <button role="tab" id="tab-offline" data-tab="offline" aria-selected="false">POS offline</button>
     <button role="tab" id="tab-discount" data-tab="discount" aria-selected="false">Manual Discount</button>
     <button role="tab" id="tab-disposal" data-tab="disposal" aria-selected="false">Disposal</button>
-    <button role="tab" id="tab-pickup" data-tab="pickup" aria-selected="false">Pickup</button>
     <button role="tab" id="tab-umss" data-tab="umss" aria-selected="false">UM/SS KPI</button>
-    <button role="tab" id="tab-offline" data-tab="offline" aria-selected="false">POS offline</button>
     <span class="tierbox" id="tier-bar"><label class="note" for="tier-filter">Shop tier 篩選</label>
     <select id="tier-filter" aria-label="Filter by shop tier"><option value="">All tiers</option></select></span>
   </nav>
@@ -296,6 +296,7 @@
       <p>未有 Manual discount 數據，資料來自 O2O POS Target (Tableau) Google Sheet 嘅「Manual Discount」tab。</p>
     </div>
     <div class="sec" id="md-body">
+      <p class="note"><b>包括全部類別（All category）</b>：Fruits、Grocery、Frozen、Chilled 等全部 POS 類別一齊計，唔係淨係生果。</p>
       <p class="note" id="md-note"></p>
       <div class="tiles" id="md-kpis"></div>
       <dl class="defs">
@@ -324,6 +325,7 @@
       <p>未有 Disposal 數據。每日上午約 9:52 會由 Tableau 抄去 O2O POS Target (Tableau) Google Sheet 嘅「Disposal」tab，之後 dashboard 更新就會見到。</p>
     </div>
     <div class="sec" id="disp-body">
+      <p class="note"><b>包括全部類別（All category）</b>：Fruits、Grocery、Frozen、Chilled 等全部 POS 類別一齊計，唔係淨係生果。</p>
       <p class="note" id="disp-note"></p>
       <div class="tiles" id="disp-kpis"></div>
       <div class="grid">
@@ -401,7 +403,7 @@
   // Outlet shops and EPR, matching the sheet's 'Excl. Outlet & EPR' summary (SWH and CHE are outlets)
   const EXCLUDED = ['SWH', 'CHE', 'EPR'];
   const sortState = {};
-  const TABS = ['dop', 'tm', 'pos', 'discount', 'disposal', 'pickup', 'umss', 'offline'];
+  const TABS = ['dop', 'tm', 'pos', 'pickup', 'offline', 'discount', 'disposal', 'umss'];
 
   async function decrypt(pkg, password) {
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);

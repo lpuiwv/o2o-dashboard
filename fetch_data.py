@@ -375,7 +375,7 @@ def ped_disposal(get, cats):
     for r in vals[hi + 1:]:
         g = lambda k: r[idx[k]] if k in idx and idx[k] < len(r) else ""
         code = str(g("shop_code")).strip()
-        if not code or not str(g("am")).strip():
+        if not code or code.lower() == "shop code" or not str(g("am")).strip():  # skip blank / repeated header rows
             continue
         shops.append({k: (str(g(k)).replace("\t", "").strip() if k in text else (abs(num(g(k)) or 0) if k.endswith("cost") or k == "total" else num(g(k))))
                       for k in PED_SHOP_COLS})

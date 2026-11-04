@@ -350,6 +350,46 @@ def fetch_pickup(get):
         return None
 
 
+PED_SHOP_COLS = {"dm": "dm", "am": "am", "um": "um/sm", "shop_code": "shop code", "shop_name": "shop name",
+                 "shop_cost": "shop disposal cost", "shop_rate": "shop disposal rate", "st_cost": "stocktake disposal cost",
+                 "st_rate": "stocktake disposal rate", "dam_cost": "stock in dam + uom cost", "dam_rate": "stock in dam + uom rate",
+                 "total": "total disposal cost", "rate": "dop (overall disposal) rate", "gmv": "gmv"}
+
+
+def ped_disposal(get, cats):
+    """Disposal tab from the PED sheet (Vivian, 4/11/2026): 'By Shop' (per shop shop-disposal / stocktake / stock-in-dam + UOM
+    cost and rate, Total Disposal Cost, DOP (Overall Disposal) Rate, GMV), the target matrix 'Disposal Rate Target'!A1:E6
+    (category x Overall / Stocktake / Shop / Stock in Damage + UOM) and per-shop category totals from 'Overall Summary'."""
+    try:
+        vals = get(PED_SHEET, "'By Shop'!A1:P200")
+    except Exception as e:
+        print(f"PED By Shop not read: {e}", file=sys.stderr)
+        return None
+    hi = next((i for i, r in enumerate(vals[:5]) if any(str(c).strip().lower() == "shop code" for c in r)), None)
+    if hi is None:
+        return None
+    head = [str(h).strip().lower() for h in vals[hi]]
+    idx = {k: head.index(n) for k, n in PED_SHOP_COLS.items() if n in head}
+    text = {"dm", "am", "um", "shop_code", "shop_name"}
+    shops = []
+    for r in vals[hi + 1:]:
+        g = lambda k: r[idx[k]] if k in idx and idx[k] < len(r) else ""
+        code = str(g("shop_code")).strip()
+        if not code or not str(g("am")).strip():
+            continue
+        shops.append({k: (str(g(k)).replace("\t", "").strip() if k in text else (abs(num(g(k)) or 0) if k.endswith("cost") or k == "total" else num(g(k))))
+                      for k in PED_SHOP_COLS})
+    targets = {}
+    try:
+        for r in get(PED_SHEET, "'Disposal Rate Target'!A1:E6")[1:]:
+            if r and str(r[0]).strip():
+                r = list(r) + [""] * 5
+                targets[str(r[0]).strip()] = {"overall": num(r[1]), "stocktake": num(r[2]), "shop": num(r[3]), "dam": num(r[4])}
+    except Exception as e:
+        print(f"PED disposal targets not read: {e}", file=sys.stderr)
+    return {"shops": shops, "targets": targets, "cats": cats} if shops else None
+
+
 def fetch_ped(get):
     """'Overall Summary' of the PED Disposal+Discount+GP sheet (one row per shop x SKU, month to date; pipeline runs
     daily 12:45 with T-1 data). Returns (summary, sku_payload):
@@ -366,11 +406,13 @@ def fetch_ped(get):
     col = lambda name: head.index(name) if name in head else None
     c = {k: col(n) for k, n in (("dm", "dm"), ("am", "am"), ("um", "um / sm"), ("shop", "shop code"), ("sku", "product code"),
                                 ("name", "sku name"), ("cat", "pos cat"), ("gmv", "total pos gmv"), ("qty", "quantity"),
-                                ("disc", "discount amount"), ("disp", "total disposal cost"), ("disp_qty", "total disposal qty"))}
+                                ("disc", "discount amount"), ("disp", "total disposal cost"), ("disp_qty", "total disposal qty"),
+                                ("c_shop", "shop disposal cost"), ("c_st", "monthly stocktake cost"), ("c_dam", "stock in dam cost"),
+                                ("c_uom", "uom missing cost"))}
     if c["shop"] is None or c["sku"] is None:
         return None, None
     g = lambda r, k: r[c[k]] if c[k] is not None and c[k] < len(r) else ""
-    fruit, um, names, rows = {}, {}, {}, []
+    fruit, um, names, rows, cats = {}, {}, {}, [], {}
     for r in vals[1:]:
         shop, sku = str(g(r, "shop")).strip(), str(g(r, "sku")).strip()
         if not shop or not sku:
@@ -384,6 +426,11 @@ def fetch_ped(get):
             f = fruit.setdefault(shop, {"disc": 0, "gmv": 0})
             f["disc"] += disc
             f["gmv"] += gmv
+        # disposal by category per shop: [GMV, shop disposal, stocktake, stock-in-dam + UOM missing, total] (costs are negative in the sheet)
+        cs = cats.setdefault(shop, {}).setdefault(cat or "Other", [0, 0, 0, 0, 0])
+        for i, v in enumerate((gmv, abs(num(g(r, "c_shop")) or 0), abs(num(g(r, "c_st")) or 0),
+                               abs(num(g(r, "c_dam")) or 0) + abs(num(g(r, "c_uom")) or 0), disp)):
+            cs[i] += v
         names.setdefault(sku, str(g(r, "name")).strip())
         if gmv or qty or disc or disp or dq:
             rows.append([shop, sku, cat, round(gmv, 2), round(qty, 2), round(disc, 2), round(dq, 2), round(disp, 2)])
@@ -400,7 +447,10 @@ def fetch_ped(get):
             teams[shop] = [str(g(r, "dm")).strip(), str(g(r, "am")).strip()]
     for f in fruit.values():
         f["disc"], f["gmv"] = round(f["disc"], 2), round(f["gmv"], 2)
-    return ({"fruit": fruit, "um": um, "as_of": as_of},
+    for d in cats.values():
+        for k in d:
+            d[k] = [round(x, 2) for x in d[k]]
+    return ({"fruit": fruit, "um": um, "as_of": as_of, "disp": ped_disposal(get, cats)},
             {"cols": ["shop", "sku", "cat", "gmv", "qty", "disc", "disp_qty", "disp_cost"], "rows": rows, "names": names,
              "teams": teams, "um": um, "as_of": as_of})
 

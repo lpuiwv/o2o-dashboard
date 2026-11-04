@@ -550,7 +550,7 @@
     const extra = tgt ? [
       { key: 't_target', label: '100% commission target', fmt: fmtN, sign: true, get: (r) => r._pin ? (T(r).target ?? null) : (mode === 'avg' ? (T(r).target ?? null) : (commissionTarget(r[k]) ?? T(r).target ?? null)) },
       { key: 't_comm', label: 'Commission now', fmt: (v) => v == null ? '' : d3.format('.0%')(v), tone: (v) => v == null ? '' : (v >= 1 ? 'pos' : (v === 0 ? 'neg' : '')), get: (r) => r._pin ? null : commissionNow(r[k], T(r).proj_full ?? r._proj_full) },
-      { key: 't_proj', label: 'Proj. DOP (target sheet)', fmt: fmtN, sign: true, get: (r) => T(r).proj_dop ?? null },
+      { key: 't_proj', label: 'Proj. DOP', fmt: fmtN, sign: true, get: (r) => T(r).proj_dop ?? null },
       { key: 't_ach', label: 'DOP ach. %', fmt: fmtP, tone: achCls, get: (r) => T(r).achievement ?? null },
       { key: 't_diff', label: 'Diff. to target', fmt: fmtN, sign: true, get: (r) => T(r).difference ?? null },
     ] : [];

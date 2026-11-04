@@ -145,8 +145,8 @@ EXCL_SHOPS = ("SWH", "CHE", "EPR")  # outlets + EPR, as in the sheet's 'Excl. Ou
 
 
 def fill_team_from_shops(team, shops, key, excl=False):
-    """Summary tabs from Nov 2026 have no Proj. DOP column (and 'TM Full Month (Plan)' showed the disposal cost):
-    take Proj. DOP and planned TM cost per DM / AM as the sum of the shop rows (Vivian, 4/11/2026)."""
+    """Fallback when the Summary tab has no Proj. DOP / planned TM column (the plain Nov 2026 tab; the "(update)" tab has
+    both): use the sum of the shop rows (Vivian, 4/11/2026)."""
     use = [s for s in shops if not (excl and s["shop_code"] in EXCL_SHOPS)]
     for r in team:
         mine = [s for s in use if s.get(key) == r.get(key)]
@@ -154,7 +154,7 @@ def fill_team_from_shops(team, shops, key, excl=False):
             continue
         if r.get("proj_dop") is None and any(s.get("proj_dop") is not None for s in mine):
             r["proj_dop"] = round(sum(s.get("proj_dop") or 0 for s in mine), 2)
-        if any(s.get("tm_plan") is not None for s in mine):
+        if r.get("tm_plan") is None and any(s.get("tm_plan") is not None for s in mine):
             r["tm_plan"] = round(sum(s.get("tm_plan") or 0 for s in mine), 2)
 
 
@@ -762,6 +762,13 @@ def make_getter():
 
 def fetch_month(get, d):
     t = tabs_for(d)
+    # The DOP bot keeps a corrected "Summary - <Mon YYYY> (update)" tab (with Proj. DOP; Vivian, 4/11/2026): use it when it exists
+    upd = {k: (t[k][0], t[k][1].replace("'!", " (update)'!", 1)) for k in ("dm", "am", "dm_ex", "am_ex")}
+    try:
+        if get(*upd["dm"]):
+            t.update(upd)
+    except Exception:
+        pass
     optional = ("dop_target", "tm_daily", "raw", "commission", "tm_daily_head", "tm_target", "gpa_target")
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
     for k in optional:

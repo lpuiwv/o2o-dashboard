@@ -1463,7 +1463,7 @@
     const a4 = a3.filter((r) => !fShop.value || r.shop === fShop.value); fillSel(fCat, [...new Set(a4.map((r) => r.cat).filter(Boolean))].sort(), 'All categories');
     const q = $('off-search').value.trim().toLowerCase();
     const rows = a4.filter((r) => (!fCat.value || r.cat === fCat.value) && (!q || `${r.sku} ${r.name}`.toLowerCase().includes(q)));
-    $('off-note').textContent = `來自「PED Disposal+Discount+GP (Disposal bot)」sheet 嘅 Overall Summary（每日 12:45 更新，數據計到尋日）${SKU.as_of ? '，' + SKU.as_of : ''}。GMV = Tableau Promotion Report（Total Price + MKT Fund + RM Discount）；Discount = manual discount；Disposal cost 未扣 supplier claim。`;
+    $('off-note').textContent = `來自「PED Disposal+Discount+GP (Disposal bot)」sheet 嘅 Overall Summary（每日 12:45 更新，數據計到尋日）${SKU.as_of ? '，' + SKU.as_of : ''}。GMV = Tableau Promotion Report（Total Price + MKT Fund + RM Discount），由 PED pipeline 每日 12:45 下載；同 Tableau「POS Offline Sales」或者 POS achievement tab 嘅 Takeaway GMV 會有少少差距（大約 0.1–0.3%，個別舖嘅交易／退款時間同報表定義唔同），睇達標請用 POS achievement tab。Discount = manual discount；Disposal cost 未扣 supplier claim。`;
     const sm = (k) => d3.sum(rows, (r) => r[k] || 0);
     tiles($('off-kpis'), [['GMV', fmtK(sm('gmv')), { hint: '月初至今' }], ['Qty sold', fmtK(sm('qty'))], ['Manual discount', fmtK(sm('disc'))],
       ['Disposal cost', fmtK(sm('disp_cost'))], ['SKU', fmtN(new Set(rows.map((r) => r.sku)).size), { hint: `${new Set(rows.map((r) => r.shop)).size} 間舖` }]]);

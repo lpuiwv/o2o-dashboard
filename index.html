@@ -836,7 +836,7 @@
     const tot = { sku_id: 'Total', sku_name: '', _pin: true, _cls: 'tot', shops: new Set(all.map((r) => r.shop_code)).size, ...Object.fromEntries(sumCols.map((k) => [k, d3.sum(bySku, (r) => r[k])])) };
     const share = (r) => tot.redemption ? r.redemption / tot.redemption : null;
     const maxRed = d3.max(bySku, (r) => r.redemption) || 0;
-    $('red-note').textContent = `來自 Tableau（O2O Report › Redemption(with x1.2 & x1.5) by SKU）${R.period ? '，' + R.period : ''}。每隻 SKU 將所有舖加埋；Share = 佔總 redemption 幾多 %。`;
+    $('red-note').textContent = `來自 Tableau（O2O Report › Redemption(with x1.2 & x1.5) by SKU）${R.period ? '，' + R.period : ''}。每隻 SKU 將所有舖加埋。Shops = 期內有賣過呢隻 SKU 嘅舖數（冇賣過嘅舖唔計）；Share = 佔總 redemption 幾多 %。`;
     drawTable($('red-sku-table'), bySku.concat(bySku.length ? [tot] : []), [
       { key: 'sku_id', label: 'SKU', freeze: true }, { key: 'sku_name', label: 'SKU name', cls: 'l', freeze: true },
       { key: 'mult', label: 'Multiplier', get: (r) => r._pin ? '' : (String(r.mult).includes('/') ? r.mult : multTxt(r.mult)) }, { key: 'period', label: 'Promotion period', cls: 'l' },

@@ -1105,7 +1105,7 @@
       { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASS', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
       { key: 'pt_hours', label: 'PT hrs (actual)', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs (actual)', fmt: fmtH },
       ...costCols(grp, ''),
-      { key: 'a_total', label: 'Actual TM cost (MTD)', fmt: fmtN, get: (r) => grp(r).total, bar: { max: d3.max(rows, (r) => grp(r).total || 0) } }]);
+      { key: 'a_total', label: 'Actual TM cost (MTD)', fmt: fmtN, get: (r) => grp(r).total }]); // no bar (Vivian, 4/11/2026)
     // Projected (full month)
     const gP = (r) => r._gp || grpP(r);
     const totP = { shop: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', _gp: sumG(grpP), _pn: { ss_n: sumK('ss', (r) => pn(r, 'ss_n')), sa_n: sumK('sa', (r) => pn(r, 'sa_n')), pt_hours: sumK('pt', (r) => pn(r, 'pt_hours')), os_hours: sumK('os', (r) => pn(r, 'os_hours')) },

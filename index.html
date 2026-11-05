@@ -300,7 +300,15 @@
       <p class="note"><b>包括全部類別（All category）</b>：Fruits、Grocery、Frozen、Chilled 等全部 POS 類別一齊計，唔係淨係生果。</p>
       <p class="note" id="md-note"></p>
       <div class="tiles" id="md-kpis"></div>
-      <dl class="defs">
+      <dl class="defs" id="md-defs-raw" hidden>
+        <dt>Manual discount</dt><dd>「Discount Raw」tab 入面 Promotion label = <b>MANUAL</b> 嘅 Discount Amount 加總（其他 label 唔計）</dd>
+        <dt>POS GMV</dt><dd>PED sheet「Overall Summary」嘅 Total POS GMV（全部類別）</dd>
+        <dt>MD rate</dt><dd>Manual discount ÷（POS GMV + Manual discount）；<b style="color: var(--bad)">紅色</b> = 高過整體 MD rate 1.5 倍</dd>
+        <dt>Avg MD per shop</dt><dd>Manual discount ÷ 舖數</dd>
+        <dt>MD lines</dt><dd>有 manual discount 嘅 POS 行數</dd>
+        <dt>Fruits</dt><dd>pos_category_type = Fruits；Fruits MD rate = Fruits manual discount ÷（Fruits GMV + Fruits manual discount）</dd>
+      </dl>
+      <dl class="defs" id="md-defs-tab">
         <dt>Store GMV</dt><dd>扣咗 manual discount 之後嘅銷售</dd>
         <dt>Manual discount</dt><dd>人手折扣金額</dd>
         <dt>MD rate</dt><dd>Manual discount ÷（Store GMV + Manual discount），同 Tableau 計法一樣；<b style="color: var(--bad)">紅色</b> = 高過整體 MD rate 1.5 倍</dd>
@@ -314,6 +322,8 @@
         <div class="card"><h3>Manual discount by shop</h3><p class="note">可以揀 AM 或者搜尋舖號、舖名。撳欄名可以排序。</p>
           <div class="ctrl"><select id="md-am-filter" aria-label="Filter by AM"></select><input id="md-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="md-table"></table></div></div>
+        <div class="card" id="md-fruit-card" hidden><h3>Manual discount — Fruits（pos_category_type = Fruits）</h3><p class="note"><b>淨係計 Fruits 類別。</b>跟上面嘅 AM 篩選同搜尋。<b style="color: var(--bad)">紅色</b> = Fruits MD rate 高過整體 Fruits MD rate 1.5 倍。</p>
+          <div class="scroll"><table id="md-fruit-table"></table></div></div>
       </div>
     </div>
   </section>
@@ -1012,13 +1022,22 @@
     const team = new Map();
     (DATA.shops || []).forEach((r) => team.set(r.shop_code, { dm: r.dm, am: r.am }));
     ((DATA.pos || {}).shops || []).forEach((r) => team.set(r.shop_code, { dm: r.dm, am: r.am }));
-    const all = M.shops.map((r) => { const t = team.get(r.shop_code) || {}; const o = { ...r, dm: t.dm || '—', am: t.am || '—' }; o.md_rate = mdRate(o); return o; });
+    const RAW = M.source === 'raw';  // PED 'Discount Raw - <Mon>' tab, Promotion label = MANUAL (Vivian, 5/11/2026)
+    const nameOf = new Map(); (DATA.shops || []).forEach((r) => nameOf.set(r.shop_code, r.shop_name)); ((DATA.pos || {}).shops || []).forEach((r) => nameOf.set(r.shop_code, r.shop_name));
+    const fRate = (o) => (o.fruit_gmv || 0) + (o.fruit_md || 0) ? (o.fruit_md || 0) / ((o.fruit_gmv || 0) + (o.fruit_md || 0)) : null;
+    const all = M.shops.map((r) => { const t = team.get(r.shop_code) || {}; const o = { ...r, shop_name: (RAW && nameOf.get(r.shop_code)) || r.shop_name, dm: t.dm || '—', am: t.am || r.am || '—' }; o.md_rate = mdRate(o); o.fruit_rate = fRate(o); return o; });
     const inTier = all.filter((r) => passTier(r.shop_code));
-    const sum = (rows) => { const o = { shops: rows.length }; ['gmv', 'net_sale', 'md', 'promo', 'qty'].forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); }); o.md_rate = mdRate(o); o.md_per_shop = rows.length ? o.md / rows.length : null; return o; };
+    const sum = (rows) => { const o = { shops: rows.length }; ['gmv', 'net_sale', 'md', 'promo', 'qty', 'lines', 'fruit_md', 'fruit_gmv'].forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); }); o.md_rate = mdRate(o); o.fruit_rate = fRate(o); o.md_per_shop = rows.length ? o.md / rows.length : null; return o; };
     const T = sum(inTier);
     const noTeam = all.filter((r) => r.am === '—').map((r) => r.shop_code);
-    $('md-note').textContent = `來自 Tableau（O2O Report › Manual Discount › Shop View），${M.period}。包括全部舖（連 outlet 同 EPR）。` + (noTeam.length ? ` ${noTeam.join('、')} 喺 POS / DOP Sheet 搵唔到 AM，所以 AM / DM 表顯示「—」。` : '');
-    tiles($('md-kpis'), [
+    $('md-defs-tab').hidden = RAW; $('md-defs-raw').hidden = !RAW; $('md-fruit-card').hidden = !RAW;
+    $('md-note').textContent = (RAW ? `來自 PED sheet「${M.tab}」，只計 Promotion label = MANUAL 嘅折扣，${M.period}。POS GMV 來自同一份 sheet 嘅「Overall Summary」${M.gmv_as_of ? '（' + M.gmv_as_of + '）' : ''}。包括全部舖（連 outlet 同 EPR）。` : `來自 Tableau（O2O Report › Manual Discount › Shop View），${M.period}。包括全部舖（連 outlet 同 EPR）。`) + (noTeam.length ? ` ${noTeam.join('、')} 喺 POS / DOP Sheet 搵唔到 AM，所以 AM / DM 表顯示「—」。` : '');
+    if (RAW) tiles($('md-kpis'), [
+      ['POS GMV', fmtK(T.gmv), { hint: '月初至今' }], ['Manual discount', fmtK(T.md), { hint: `${T.shops} 間舖` }],
+      ['MD rate', fmtP(T.md_rate), { hint: 'MD ÷（GMV + MD）' }], ['Avg MD per shop', fmtK(T.md_per_shop)],
+      ['Fruits manual discount', fmtK(T.fruit_md), { hint: 'pos_category_type = Fruits' }], ['Fruits MD rate', fmtP(T.fruit_rate), { hint: 'Fruits MD ÷（Fruits GMV + MD）' }],
+    ]);
+    else tiles($('md-kpis'), [
       ['Store GMV', fmtK(T.gmv), { hint: '月初至今' }], ['Manual discount', fmtK(T.md), { hint: `${T.shops} 間舖` }],
       ['MD rate', fmtP(T.md_rate), { hint: 'MD ÷（GMV + MD）' }], ['Avg MD per shop', fmtK(T.md_per_shop)],
       ['Promotion discount', fmtK(T.promo)], ['Shop Qty sold', fmtK(T.qty)],
@@ -1028,7 +1047,9 @@
       return g.concat(g.length ? [{ [key]: 'Total', _pin: true, _cls: 'tot', ...T }] : []);
     };
     const rateTone = (v) => v == null || !T.md_rate ? '' : (v > T.md_rate * 1.5 ? 'neg' : '');
-    const gCols = (key, label, rows) => [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'gmv', label: 'Store GMV', fmt: fmtN },
+    const gCols = (key, label, rows) => RAW ? [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'gmv', label: 'POS GMV', fmt: fmtN },
+      { key: 'md', label: 'Manual discount', fmt: fmtN }, { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone },
+      { key: 'md_per_shop', label: 'Avg MD per shop', fmt: fmtN }, { key: 'lines', label: 'MD lines', fmt: fmtN }] : [{ key, label, freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, { key: 'gmv', label: 'Store GMV', fmt: fmtN },
       { key: 'md', label: 'Manual discount', fmt: fmtN }, { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone },
       { key: 'md_per_shop', label: 'Avg MD per shop', fmt: fmtN }, { key: 'promo', label: 'Promotion discount', fmt: fmtN }, { key: 'net_sale', label: 'Net Sale', fmt: fmtN }, { key: 'qty', label: 'Qty sold', fmt: fmtN }];
     const dm = group('dm'), am = group('am');
@@ -1039,6 +1060,22 @@
     const q = mdSearch.value.trim().toLowerCase();
     const rows = inTier.filter((r) => (!picked || r.am === picked) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
     const tot = { shop_code: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', ...sum(rows) };
+    if (RAW) {
+      drawTable($('md-table'), rows.concat(rows.length ? [tot] : []), [
+        { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+        { key: 'am', label: 'AM', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.am },
+        { key: 'gmv', label: 'POS GMV', fmt: fmtN }, { key: 'md', label: 'Manual discount', fmt: fmtN }, { key: 'md_rate', label: 'MD rate', fmt: fmtP, tone: rateTone },
+        { key: 'lines', label: 'MD lines', fmt: fmtN }, { key: 'qty', label: 'Qty (discounted)', fmt: fmtN }]);
+      // Fruits only (pos_category_type = Fruits), same AM filter / search (Vivian, 5/11/2026)
+      const fTone = (v) => v == null || !T.fruit_rate ? '' : (v > T.fruit_rate * 1.5 ? 'neg' : '');
+      drawTable($('md-fruit-table'), rows.concat(rows.length ? [tot] : []), [
+        { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
+        { key: 'am', label: 'AM', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.am },
+        { key: 'fruit_gmv', label: 'Fruits GMV', fmt: fmtN }, { key: 'fruit_md', label: 'Fruits manual discount', fmt: fmtN },
+        { key: 'fruit_rate', label: 'Fruits MD rate', fmt: fmtP, tone: fTone },
+        { key: 'fruit_share', label: 'Fruits share of shop MD', fmt: fmtP, get: (r) => r.md ? (r.fruit_md || 0) / r.md : null }]);
+      return;
+    }
     drawTable($('md-table'), rows.concat(rows.length ? [tot] : []), [
       { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
       { key: 'am', label: 'AM', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.am },
@@ -1350,7 +1387,8 @@
     const P = DATA.pos || {}, M = DATA.md || {};
     stamp('stamp-pos', [[L.src + '（Tableau）', '每日上午約 9:00' + (P.tableau_updated ? `（今次：${P.tableau_updated}）` : '')], [L.per, P.period], [L.imp, P.exported_at], [L.upd, DATA.generated_at]]);
     stamp('stamp-disp', [[L.src + '（PED Disposal sheet）', '每日 12:45（數據計到尋日）'], [L.per, (DATA.ped || {}).as_of || ''], [L.upd, DATA.generated_at]]);
-    stamp('stamp-md', [[L.src + '（Tableau）', '每日上午約 9:00' + (M.tableau_updated ? `（今次：${M.tableau_updated}）` : '')], [L.per, M.period], [L.imp, M.exported_at], [L.upd, DATA.generated_at]]);
+    if (M.source === 'raw') stamp('stamp-md', [[L.src + `（PED sheet：${M.tab}）`, '每日 12:45（數據計到尋日）'], [L.per, M.period], [L.upd, DATA.generated_at]]);
+    else stamp('stamp-md', [[L.src + '（Tableau）', '每日上午約 9:00' + (M.tableau_updated ? `（今次：${M.tableau_updated}）` : '')], [L.per, M.period], [L.imp, M.exported_at], [L.upd, DATA.generated_at]]);
     const PU = DATA.pickup || {};
     stamp('stamp-pickup', [[L.src + '（Tableau）', '每日上午約 9:00'], [L.per, PU.period], [L.imp, PU.exported_at], [L.upd, DATA.generated_at]]);
   }

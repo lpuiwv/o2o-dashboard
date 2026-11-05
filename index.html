@@ -1191,21 +1191,21 @@
       { key: 'c_os' + sfx, label: 'OS cost', fmt: fmtN, get: (r) => fn(r).os },
       { key: 'c_ot' + sfx, label: 'OT + transport', fmt: fmtN, get: (r) => fn(r).ot + fn(r).tr }];
     // Actual (MTD)
-    const totA = { shop: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', _g: sumG(grp), ss_n: sumK('ss_n'), assp_n: sumK('assp_n'), sa_n: sumK('sa_n'), pt_hours: sumK('pt_hours'), os_hours: sumK('os_hours') };
+    const totA = { shop: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', _g: sumG(grp), um_n: sumK('um_n'), ss_n: sumK('ss_n'), assp_n: sumK('assp_n'), sa_n: sumK('sa_n'), pt_hours: sumK('pt_hours'), os_hours: sumK('os_hours') };
     drawTable($('tm-table'), rows.concat(rows.length ? [totA] : []), [...head,
-      { key: 'ss_n', label: 'SS', fmt: fmtN }, { key: 'assp_n', label: 'ASS', fmt: fmtN }, { key: 'sa_n', label: 'SA', fmt: fmtN },
+      { key: 'um_n', label: 'UM/AUM headcount', fmt: fmtN }, { key: 'ssass_n', label: 'SS/ASS headcount', fmt: fmtN, get: (r) => (r.ss_n || 0) + (r.assp_n || 0) }, { key: 'sa_n', label: 'SA headcount', fmt: fmtN },
       { key: 'pt_hours', label: 'PT hrs (actual)', fmt: fmtH }, { key: 'os_hours', label: 'OS hrs (actual)', fmt: fmtH },
       ...costCols(grp, ''),
       { key: 'a_total', label: 'Actual TM cost (MTD)', fmt: fmtN, get: (r) => grp(r).total }]); // no bar (Vivian, 4/11/2026)
     // Projected (full month)
     const gP = (r) => r._gp || grpP(r);
-    const totP = { shop: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', _gp: sumG(grpP), _pn: { ss_n: sumK('ss', (r) => pn(r, 'ss_n')), sa_n: sumK('sa', (r) => pn(r, 'sa_n')), pt_hours: sumK('pt', (r) => pn(r, 'pt_hours')), os_hours: sumK('os', (r) => pn(r, 'os_hours')) },
+    const totP = { shop: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot', _gp: sumG(grpP), _pn: { um_n: sumK('um', (r) => pn(r, 'um_n')), ss_n: sumK('ss', (r) => pn(r, 'ss_n')), sa_n: sumK('sa', (r) => pn(r, 'sa_n')), pt_hours: sumK('pt', (r) => pn(r, 'pt_hours')), os_hours: sumK('os', (r) => pn(r, 'os_hours')) },
       _tgt: d3.sum(rows, (r) => (tgt.get(r.shop) || {}).target_tm || 0),
       _ptp: d3.sum(rows.filter((r) => (tgt.get(r.shop) || {}).target_tm != null), (r) => grpP(r).total) }; // projection of the shops that have a target
     const pv = (k) => (r) => r._pin ? r._pn[k] : pn(r, k);
     const tgtOf = (r) => r._pin ? (tgt.size ? r._tgt : null) : ((tgt.get(r.shop) || {}).target_tm ?? null);
     drawTable($('tm-table-p'), rows.concat(rows.length ? [totP] : []), [...head,
-      { key: 'p_ss_n', label: 'SS/ASS (roster)', fmt: fmtN, get: pv('ss_n') }, { key: 'p_sa_n', label: 'SA (roster)', fmt: fmtN, get: pv('sa_n') },
+      { key: 'p_um_n', label: 'UM/AUM headcount', fmt: fmtN, get: pv('um_n') }, { key: 'p_ss_n', label: 'SS/ASS headcount', fmt: fmtN, get: pv('ss_n') }, { key: 'p_sa_n', label: 'SA headcount', fmt: fmtN, get: pv('sa_n') },
       { key: 'p_pt_h', label: 'PT hrs (roster)', fmt: fmtH, get: pv('pt_hours') }, { key: 'p_os_h', label: 'OS hrs (schedule)', fmt: fmtH, get: pv('os_hours') },
       ...costCols(gP, '_p'),
       { key: 'p_total', label: 'Projected TM cost', fmt: fmtN, get: (r) => gP(r).total }, // no bar (Vivian, 4/11/2026)

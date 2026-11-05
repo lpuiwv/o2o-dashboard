@@ -105,7 +105,8 @@ def shop_key(h):
 
 PROJ_SHOP_KEYS = (("pos gpa", "proj_pos_gpa"), ("pickup gpa", "proj_pickup_gpa"), ("proj. pickup gmv", "proj_pickup_gmv"),
                   ("proj. pos gmv", "proj_pos_gmv"), ("planned", "tm_plan"), ("disposal", "proj_disposal_cost"),
-                  ("other", "proj_other_mkt_cost"), ("proj. dop", "proj_dop"), ("open day", "open_day"))
+                  ("other", "proj_other_mkt_cost"), ("proj. dop", "proj_dop"), ("open day", "open_day"),
+                  ("pos as-of", "pos_asof"), ("pickup as-of", "pickup_asof"))
 
 
 def parse_shops(values):
@@ -142,6 +143,46 @@ def parse_shops(values):
 
 
 EXCL_SHOPS = ("SWH", "CHE", "EPR")  # outlets + EPR, as in the sheet's 'Excl. Outlet & EPR' blocks
+TEAM_SUM_KEYS = ("pos_gpa", "pickup_gpa", "tm_cost", "disposal_cost", "other_mkt_cost", "dop", "proj_pos_gmv", "proj_pos_gpa",
+                 "proj_pickup_gpa", "proj_pickup_gmv", "tm_plan", "proj_disposal_cost", "proj_other_mkt_cost", "proj_dop")
+
+
+def team_from_shops(shops, key, excl=False):
+    """DM / AM rows summed from the 'DOP MTD' shop rows (same keys as the Summary rows, plus the projected block).
+    POS GMV (MTD) is not in the tab: worked out per shop as POS GPA / POS GP% (approximate - GP% is rounded to 0.1%)."""
+    use = [s for s in shops if not (excl and s["shop_code"] in EXCL_SHOPS)]
+    out = []
+    for name in sorted({s.get(key) for s in use if s.get(key)}):
+        mine = [s for s in use if s.get(key) == name]
+        r = {key: name}
+        for k in TEAM_SUM_KEYS:
+            vals = [s.get(k) for s in mine if s.get(k) is not None]
+            r[k] = round(sum(vals), 2) if vals else None
+        r["pos_gmv"] = round(sum((s["pos_gpa"] or 0) / s["pos_gp_pct"] for s in mine if s.get("pos_gp_pct")), 2)
+        r["gp_pct"] = r["pos_gpa"] / r["pos_gmv"] if r["pos_gmv"] and r["pos_gpa"] is not None else None
+        r["mkt_cost"] = r.pop("other_mkt_cost")  # Other & MKT costs (office, rental, operating, WH & log, capex, MKT)
+        for k in ("office_cost", "rental_cost", "operating_cost", "wh_log_cost", "capex"):
+            r[k] = None
+        out.append(r)
+    return out
+
+
+def shops_as_of(shops, d):
+    """'POS as-of' / 'Pickup as-of' columns hold the day of month the to-date block runs to."""
+    day = lambda k: max((int(s[k]) for s in shops if s.get(k)), default=None)
+    fmt = lambda n: f"{n:02d}/{d:%m/%Y}" if n else ""
+    pos, pick = fmt(day("pos_asof")), fmt(day("pickup_asof"))
+    pos = pos or pick
+    return pos, {k: pos for k in ("pos_gmv", "pos_gpa", "gp_pct", "tm_cost", "disposal_cost", "mkt_cost", "dop")} | {"pickup_gpa": pick or pos}
+
+
+def shops_adjusted(values):
+    """'PROJECTED after Rebate, Claim supp, AST' line under the shop rows: company-wide Proj. DOP after those items."""
+    for r in values or []:
+        if r and str(r[0]).strip().upper().startswith("PROJECTED AFTER"):
+            v = next((num(c) for c in reversed(r) if num(c) is not None), None)
+            return {"label": str(r[0]).strip(), "proj_dop": v}
+    return None
 
 
 def fill_team_from_shops(team, shops, key, excl=False):
@@ -450,7 +491,8 @@ def fetch_ped(get):
     for d in cats.values():
         for k in d:
             d[k] = [round(x, 2) for x in d[k]]
-    return ({"fruit": fruit, "um": um, "as_of": as_of, "disp": ped_disposal(get, cats)},
+    gmv_all = {shop: round(sum(v[0] for v in d.values()), 2) for shop, d in cats.items()}
+    return ({"fruit": fruit, "um": um, "as_of": as_of, "disp": ped_disposal(get, cats), "gmv": gmv_all},
             {"cols": ["shop", "sku", "cat", "gmv", "qty", "disc", "disp_qty", "disp_cost"], "rows": rows, "names": names,
              "teams": teams, "um": um, "as_of": as_of})
 
@@ -486,6 +528,61 @@ def fetch_md(get):
         return None
 
 
+def fetch_md_raw(get, d, ped):
+    """Manual Discount from the PED sheet's 'Discount Raw - <Mon YYYY>' tab (Vivian, 5/11/2026): one row per discounted
+    POS line; keep only Promotion Label = MANUAL. Per shop: manual discount (all categories) and Fruits only
+    (pos_category_type starting with "fruit"). GMV for the MD rate comes from the same sheet's 'Overall Summary'
+    (Total POS GMV, all categories / Fruits). Returns None if the tab is missing (then the Tableau tab is used)."""
+    tab = f"Discount Raw - {d:%b %Y}"
+    try:
+        vals = get(PED_SHEET, f"'{tab}'!A1:R100000")
+    except Exception as e:
+        print(f"{tab} not read: {e}", file=sys.stderr)
+        return None
+    if not vals:
+        return None
+    head = [str(h).strip().lower() for h in vals[0]]
+    col = lambda n: head.index(n) if n in head else None
+    c = {k: col(n) for k, n in (("shop", "shop code"), ("name", "store name"), ("date", "date"), ("amt", "discount amount"),
+                                ("label", "promotion label"), ("cat", "pos_category_type"), ("am", "am"), ("qty", "quantity"))}
+    if c["shop"] is None or c["amt"] is None or c["label"] is None:
+        print(f"{tab}: columns not found", file=sys.stderr)
+        return None
+    g = lambda r, k: r[c[k]] if c[k] is not None and c[k] < len(r) else ""
+    shops, dates, labels, skipped = {}, [], {}, 0
+    for r in vals[1:]:
+        shop = str(g(r, "shop")).strip()
+        if not shop:
+            continue
+        lab = str(g(r, "label")).strip().upper()
+        labels[lab] = labels.get(lab, 0) + 1
+        if lab != "MANUAL":
+            skipped += 1
+            continue
+        amt = num(g(r, "amt")) or 0
+        o = shops.setdefault(shop, {"shop_code": shop, "shop_name": str(g(r, "name")).strip(), "am": str(g(r, "am")).strip(),
+                                    "md": 0, "lines": 0, "qty": 0, "fruit_md": 0, "fruit_lines": 0})
+        o["md"] += amt; o["lines"] += 1; o["qty"] += num(g(r, "qty")) or 0
+        if str(g(r, "cat")).strip().lower().startswith("fruit"):
+            o["fruit_md"] += amt; o["fruit_lines"] += 1
+        dt_ = str(g(r, "date")).strip()
+        if dt_:
+            dates.append(dt_)
+    ped = ped or {}
+    gmv, fruit = ped.get("gmv") or {}, ped.get("fruit") or {}
+    for code in set(gmv) | set(fruit):  # shops with sales but no manual discount
+        shops.setdefault(code, {"shop_code": code, "shop_name": "", "am": "", "md": 0, "lines": 0, "qty": 0, "fruit_md": 0, "fruit_lines": 0})
+    for code, o in shops.items():
+        o["gmv"] = gmv.get(code)
+        o["fruit_gmv"] = (fruit.get(code) or {}).get("gmv")
+        for k in ("md", "fruit_md", "qty"):
+            o[k] = round(o[k], 2)
+    fmt = lambda x: f"{x[8:10]}/{x[5:7]}/{x[0:4]}" if len(x) >= 10 else x
+    period = f"{fmt(min(dates))} - {fmt(max(dates))}" if dates else ""
+    return {"shops": sorted(shops.values(), key=lambda o: o["shop_code"]), "period": period, "source": "raw", "tab": tab,
+            "labels": labels, "skipped": skipped, "gmv_as_of": ped.get("as_of", ""), "exported_at": "", "tableau_updated": ""}
+
+
 def parse_dop_target(values):
     """'Oct Target' tab: two blocks (AM, DM) of name / Target / Proj. DOP / Project Achievement / Difference."""
     out = {"am": [], "dm": [], "note": ""}
@@ -515,7 +612,7 @@ def parse_dop_target(values):
 
 
 
-def fill_dop_target(t, dm_ex, am_ex):
+def fill_dop_target(t, dm_ex, am_ex, force=False):
     """'<Mon> Target' tab of Nov 2026 has Proj. DOP blank (so its achievement shows 200% / 0%): use the dashboard's own
     Proj. DOP (sum of shops, excl. outlets & EPR - the targets exclude outlets) and work out achievement and difference
     with the sheet's rule: negative target -> target / projection, otherwise projection / target (Vivian, 4/11/2026)."""
@@ -524,7 +621,7 @@ def fill_dop_target(t, dm_ex, am_ex):
     for block, team in (("dm", dm_ex), ("am", am_ex)):
         proj = {r.get(block): r.get("proj_dop") for r in team}
         for r in t.get(block, []):
-            if r.get("proj_dop") is None and proj.get(r["name"]) is not None:
+            if (force or r.get("proj_dop") is None) and proj.get(r["name"]) is not None:
                 p, tg = proj[r["name"]], r.get("target")
                 r["proj_dop"] = p
                 r["proj_from"] = "dashboard"
@@ -774,7 +871,7 @@ def tabs_for(d):
         "am": (DOP_SHEET, f"'Summary - {mon}'!A8:T15"),
         "dm_ex": (DOP_SHEET, f"'Summary - {mon}'!A18:T22"),
         "am_ex": (DOP_SHEET, f"'Summary - {mon}'!A25:T32"),
-        "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:T150"),
+        "shops": (DOP_SHEET, f"'DOP MTD - {mon}'!A1:V150"),
         "dop_target": (DOP_SHEET, f"'{d:%b} Target'!A1:H40"),
         "commission": (DOP_SHEET, f"'{d:%b} Target %'!A1:K20"),
         "tm_daily_head": (TM_SHEET, f"'每日 PT 外判 {d:%Y%m}'!A1"),
@@ -872,8 +969,17 @@ def fetch_all():
     dm_ex, _, _ = parse_team(raw["dm_ex"], "dm")
     am_ex, _, _ = parse_team(raw["am_ex"], "am")
     shops = parse_shops(raw["shops"])
-    for team, key, ex in ((dm, "dm", False), (am, "am", False), (dm_ex, "dm", True), (am_ex, "am", True)):
-        fill_team_from_shops(team, shops, key, ex)
+    dop_src = "summary"
+    if any(s.get("proj_dop") is not None for s in shops):
+        # From 5/11/2026 the DOP tab is built from 'DOP MTD - <Mon YYYY>' (Vivian: more accurate than the Summary tabs):
+        # DM / AM rows = sum of the shop rows; To-date block = actual, Projected block = full-month projection.
+        dm, am = team_from_shops(shops, "dm"), team_from_shops(shops, "am")
+        dm_ex, am_ex = team_from_shops(shops, "dm", True), team_from_shops(shops, "am", True)
+        as_of, dates = shops_as_of(shops, raw["_date"])
+        dop_src = "dop_mtd"
+    else:
+        for team, key, ex in ((dm, "dm", False), (am, "am", False), (dm_ex, "dm", True), (am_ex, "am", True)):
+            fill_team_from_shops(team, shops, key, ex)
     ft_ratio = None
     if raw["_tm_kind"] == "v1":
         tm, um_split = parse_tm_v1(raw["tm"])
@@ -890,6 +996,7 @@ def fetch_all():
                 r[blk]["mgmt"] = 0
             r["total_cost"], r["roster_total_cost"] = r["act"]["total"], r["proj"]["total"]
     ped, sku = fetch_ped(get)
+    md = fetch_md_raw(get, raw["_date"], ped) or fetch_md(get)
     return {
         "month": raw["_month"],
         "as_of": as_of,
@@ -897,7 +1004,7 @@ def fetch_all():
         "tm_budget": fetch_budget(get, raw["_date"]),
         "dm_ex": dm_ex, "am_ex": am_ex,
         "pos": fetch_pos(get),
-        "md": fetch_md(get),
+        "md": md,
         "disposal": fetch_disposal(get),
         "redemption": fetch_redemption(get),
         "pickup": fetch_pickup(get),
@@ -905,7 +1012,8 @@ def fetch_all():
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
         "tm_by_day": parse_tm_by_day(raw.get("raw") or []),
-        "dop_target": fill_dop_target(parse_dop_target(raw.get("dop_target") or []), dm_ex, am_ex),
+        "dop_target": fill_dop_target(parse_dop_target(raw.get("dop_target") or []), dm_ex, am_ex, force=dop_src == "dop_mtd"),
+        "dop_src": dop_src, "dop_tab": f"DOP MTD - {raw['_date']:%b %Y}", "dop_adj": shops_adjusted(raw["shops"]),
         "commission": parse_commission(raw.get("commission") or []),
         "stamps": tm_stamps(raw),
         "tm_target_pct": parse_tm_target_summary(raw.get("tm_target") or []),

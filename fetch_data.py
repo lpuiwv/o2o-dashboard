@@ -254,7 +254,7 @@ def parse_tm_v1(values):
         act, proj = block(r, 0, cut), block(r, cut + 1, end)
         proj_n = {"pt_hours": cnt(["PT 時數"], cut + 1, end), "os_hours": cnt(["外判時數"], cut + 1, end),
                   "ot_hours": cnt(["OT 時數"], cut + 1, end), "ss_n": cnt(["SS/AS 人數", "SS 人數", "AS 人數"], cut + 1, end),
-                  "sa_n": cnt(["SA 人數"], cut + 1, end)}
+                  "sa_n": cnt(["SA 人數"], cut + 1, end), "um_n": cnt(["UM 人數"], cut + 1, end)}
         rows.append({"shop": code, "shop_name": r[1], "ss_n": cnt(["SS/AS 人數", "SS 人數"]), "assp_n": cnt(["AS 人數"]),
                      "sa_n": cnt(["SA 人數"]), "um_n": cnt(["UM 人數"]), "pt_hours": cnt(["PT 時數"]), "os_hours": cnt(["外判時數"]),
                      "total_cost": act["total"], "roster_total_cost": proj["total"], "act": act, "proj": proj,

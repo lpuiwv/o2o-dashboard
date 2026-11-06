@@ -2,8 +2,9 @@ name: Daily dashboard refresh
 
 on:
   schedule:
-    - cron: "15 2 * * *"   # 10:15 Hong Kong time, every day (TM cost sheet; Tableau POS / Manual Discount copied at 09:27)
-    - cron: "30 6 * * *"   # 14:30 Hong Kong time, every day (DOP sheets update at 2pm; Tableau POS / Manual Discount written at 09:27)
+    - cron: "15 2 * * *"   # 10:15 Hong Kong time: TM cost (09:45), Tableau POS / Pickup (scheduled task 09:52), POS offline
+    - cron: "0 5 * * *"    # 13:00 Hong Kong time: PED sheet (12:45) -> Manual Discount, Disposal, POS offline, UM/SS KPI (Vivian, 6/11/2026)
+    - cron: "30 6 * * *"   # 14:30 Hong Kong time: DOP sheet (2pm)
     - cron: "5 16 31 10 *" # 00:05 Hong Kong time on 1 Nov: run once so the GitHub Pages link closes (see "Close" step)
   workflow_dispatch:        # "Run workflow" button for a manual refresh
   push:

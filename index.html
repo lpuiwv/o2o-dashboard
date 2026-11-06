@@ -77,6 +77,11 @@
   .ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .dl-row { display: flex; justify-content: flex-end; margin: 4px 0 6px; }
   a.dl { display: inline-block; text-decoration: none; }
+  .per { display: block; width: fit-content; font-size: 12px; color: var(--fg); background: var(--grid); border-left: 3px solid var(--accent); border-radius: 4px; padding: 3px 8px; margin: 2px 0 6px; }
+  .per[hidden] { display: none; }
+  ul.note-list { margin: 2px 0 8px; padding-left: 18px; font-size: 12px; color: var(--muted); line-height: 1.55; }
+  ul.note-list li { margin: 1px 0; }
+  ul.note-list b { color: var(--fg); }
   .dl { font: inherit; font-size: 12px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card, transparent); color: var(--fg); cursor: pointer; }
   .dl:hover { border-color: var(--accent); color: var(--accent); }
   select, input { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
@@ -176,9 +181,9 @@
         </div>
       </div>
       <div class="stack">
-        <div class="card"><h3>DM summary</h3><p class="note"><span class="dop-def">DOP = POS GPA + pickup GPA − 前線 TM、office、disposal、租金、營運、倉庫及物流、capex 同 marketing 成本。</span><b>Commission % 跟「<span class="comm-tab"></span>」tab</b>：睇 Proj. DOP 做到邊個級別（120%、110%、100% … 50%），取最高嗰級；低過 50% 級別即 0%。100% commission target = 嗰個 tab 嘅 100% 級別。Proj. DOP 唔計 outlet（SWH、CHE）同 EPR；Diff. to target = Proj. DOP − 100% target。</p><div class="scroll"><table id="dm-table"></table></div></div>
-        <div class="card"><h3>AM summary</h3><p class="note"><span class="dop-projdef">Projected DOP = DOP × 當月日數 ÷ 已有 POS 銷售嘅日數，同 Sheet 一樣。</span>Commission % 同 DM 一樣，跟「<span class="comm-tab"></span>」tab 嘅級別計。</p><div class="scroll"><table id="am-table"></table></div></div>
-        <div class="card"><h3>Shop count by DM and AM</h3><p class="note">而家範圍內嘅舖數，同預計月底 DOP 係正數嘅舖數。</p><div class="scroll"><table id="count-table"></table></div></div>
+        <div class="card"><h3>DM summary</h3><span class="per" data-per="dop_both" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下所有舖加埋</li><li><b>(Actual)</b> = 月初至今實數；<b>(Proj.)</b> = 全月預計</li><li><b>Commission %</b> = Proj. DOP 做到「<span class="comm-tab"></span>」tab 邊個級別（120%、110%、100% … 50%）就取嗰級；低過 50% = 0%</li><li><b>100% commission target</b> = 嗰個 tab 嘅 100% 級別；<b>Diff. to target</b> = Proj. DOP − 100% target</li><li>Commission 嗰幾欄嘅 Proj. DOP 唔計 outlet（SWH、CHE）同 EPR</li></ul><div class="scroll"><table id="dm-table"></table></div></div>
+        <div class="card"><h3>AM summary</h3><span class="per" data-per="dop_both" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 AM 旗下所有舖加埋</li><li><b>(Actual)</b> = 月初至今實數；<b>(Proj.)</b> = 全月預計</li><li><b>Commission %</b> 計法同 DM summary 一樣（跟「<span class="comm-tab"></span>」tab）</li></ul><div class="scroll"><table id="am-table"></table></div></div>
+        <div class="card"><h3>Shop count by DM and AM</h3><span class="per" data-per="dop_proj" hidden></span><ul class="note-list"><li><b>Shops</b> = 而家範圍內嘅舖數</li><li><b>Proj. DOP positive / negative</b> = 全月預計 DOP 係正數 / 負數嘅舖數</li></ul><div class="scroll"><table id="count-table"></table></div></div>
       </div>
     </div>
 
@@ -189,7 +194,7 @@
         <input id="search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops">
       </div>
       <div class="grid">
-        <div class="card"><h3>All shops</h3><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
+        <div class="card"><h3>All shops</h3><span class="per" data-per="dop_both" hidden></span><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
       </div>
     </div>
   </section>
@@ -200,10 +205,11 @@
     <div class="callout plain"><b>成本點計</b>每項成本 = basic + non-basic，再加：DM、AM、UM、SS、ASS、SA 加 15% overhead · PT 加 7%（468PT 每人另加 $1,000）· 偏遠店 SA–UM 有 $1,000 交通津貼。OT 每小時 $60，外判每小時 $65。<b id="tm-dmam-note" class="tm-dmam" hidden></b></div>
     <div class="tiles" id="tm-kpis"></div>
     <div class="grid">
-      <div class="card"><h3>Where the TM cost goes — Actual</h3><p class="note">全部舖月初至今嘅實際 TM cost 按組別分，HK$。<b>Cost 按 SIO 紀錄計。</b>圓心係 PT + 外判（OS）佔幾多 %。<span class="tm-src"></span></p><div class="pie" id="mix"></div></div>
-      <div class="card"><h3>Where the TM cost goes — Projected</h3><p class="note">全部舖全月預計 TM cost 按組別分，HK$。<b>Cost 按 roster 計。</b>圓心係 PT + 外判（OS）佔幾多 %。PT 用 roster 全月時數；<span class="tm-proj-note"></span></p><div class="pie" id="mix-proj"></div></div>
+      <div class="card"><h3>Where the TM cost goes — Actual</h3><span class="per" data-per="tm_act" hidden></span><ul class="note-list"><li>全部舖<b>實際</b> TM cost 按職級分（HK$），<b>按 SIO 打卡紀錄計</b></li><li><b>圓心</b> = PT + 外判（OS）佔幾多 %</li><li><span class="tm-src"></span></li></ul><div class="pie" id="mix"></div></div>
+      <div class="card"><h3>Where the TM cost goes — Projected</h3><span class="per" data-per="tm_proj" hidden></span><ul class="note-list"><li>全部舖<b>全月預計</b> TM cost 按職級分（HK$），<b>按 roster 計</b>（PT 用 roster 全月時數）</li><li><b>圓心</b> = PT + 外判（OS）佔幾多 %</li><li><span class="tm-proj-note"></span></li></ul><div class="pie" id="mix-proj"></div></div>
       <div class="card" id="tt-card" hidden>
         <h3>TM cost vs target</h3>
+        <span class="per" data-per="tm_both" hidden></span>
         <p class="note tt-lead">每間舖嘅 TM cost 對比 target。<b>已剔除 DM、AM</b>，跟 Shop tier 篩選。DEF 負數（紅色）= 預計超咗 target。</p>
         <dl class="defs">
           <dt>TM cost (MTD)</dt><dd>月初至今實際 TM cost（<span class="tt-days"></span>）</dd>
@@ -237,25 +243,25 @@
       </div>
       <div class="card">
         <h3>TM cost by shop — Actual（月初至今）</h3>
-        <p class="note">呢個表全部係<b>實際</b>數（月初至今，<span class="tm-act-to"></span>）：人數、時數同成本都係實數，成本已包上面講嘅 overhead。全月預計數喺下一個表。AM 篩選同搜尋會同下面兩個表同步。</p>
+        <span class="per" data-per="tm_act" hidden></span><ul class="note-list"><li><b>全部係實數</b>：每間舖嘅人數（headcount）、PT / OS 時數同 TM cost</li><li>Cost 已包上面「成本點計」講嘅 overhead</li><li>AM 篩選同搜尋同下面兩個表同步</li></ul>
         <div class="ctrl"><select id="tm-am-filter" aria-label="Filter by AM"></select><input id="tm-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table"></table></div>
       </div>
       <div class="card">
         <h3>TM cost by shop — Projected（全月預計）</h3>
-        <p class="note">呢個表全部係<b>全月預計</b>數：固定成本按全月計，PT 用 roster 時數，外判用外判更表。有 target 嘅月份會顯示 Target TM cost 同 DEF（target − projection，負數 = 預計超 target，紅色）。AM 篩選同搜尋同上面個表同步。</p>
+        <span class="per" data-per="tm_proj" hidden></span><ul class="note-list"><li><b>全部係全月預計</b>：固定成本按全月計，PT 用 roster 時數，外判用外判更表</li><li><b>Target TM cost</b> = 全月 target；<b>DEF</b> = Target − Projected（<b style="color: var(--bad)">負數紅色</b> = 預計超 target）</li><li>AM 篩選同搜尋同上面個表同步</li></ul>
         <div class="ctrl"><select class="tm-am-mirror" aria-label="Filter by AM"></select><input class="tm-search-mirror" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="tm-table-p"></table></div>
       </div>
       <div class="card">
         <h3>Staff cost distribution by shop</h3>
-        <p class="note">每組佔該舖 TM cost 嘅 %：左邊係月初至今（MTD）實數，右邊係全月預計（Projected），每邊幾項加埋 = 100%。AM 篩選同搜尋同 TM cost by shop 同步。</p>
+        <span class="per" data-per="tm_both" hidden></span><ul class="note-list"><li>每個職級佔該舖 TM cost 嘅 %</li><li><b>(MTD)</b> = 月初至今實數；<b>(Projected)</b> = 全月預計；每邊加埋 = 100%</li><li>AM 篩選同搜尋同 TM cost by shop 同步</li></ul>
         <div class="ctrl"><select class="tm-am-mirror" aria-label="Filter by AM"></select><input class="tm-search-mirror" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
         <div class="scroll"><table id="dist-table"></table></div>
       </div>
       <div class="card" id="tm-daily-card">
         <h3>Projected monthly TM cost — daily tracking</h3>
-        <p class="note">每日記低一次全月預計 TM cost（每間舖），再同上一日比：增加係紅色，減少係綠色。「主要變動」講邊間舖、邊項變咗，例如 PT 減咗幾多小時。跟 Shop tier 篩選。</p>
+        <span class="per" data-per="tm_hist" hidden></span><ul class="note-list"><li>每日記低一次<b>全月預計</b> TM cost，同上一日比：<b style="color: var(--bad)">增加紅色</b>、<b style="color: var(--good)">減少綠色</b></li><li><b>主要變動</b> = 邊間舖、邊項變咗（例如 PT 減咗幾多小時）</li><li>跟 Shop tier 篩選</li></ul>
         <div class="chart" id="tm-daily-chart"></div>
         <div class="scroll"><table id="tm-daily-table"></table></div>
         <h4 class="sub-h" id="tm-diff-title"></h4>
@@ -275,15 +281,15 @@
       <p class="note" id="pos-note"></p>
       <div class="tiles" id="pos-kpis"></div>
       <div class="grid">
-        <div class="card"><h3>DM target achievement</h3><p class="note">POS GMV 對比月 target，將每個 DM 有 target 嘅舖加埋（Σ GMV ÷ Σ target）。預計達標 = 按月初至今 GMV 推算全月。<b class="pos-ex"></b></p><div class="scroll"><table id="pos-dm-table"></table></div></div>
-        <div class="card"><h3>AM target achievement</h3><p class="note">按 AM 計 POS GMV 對比月 target，只計有 target 嘅舖；所以有冇 target 舖嘅 AM，數字會同 Tableau 有少少唔同。<b class="pos-ex"></b></p><div class="scroll"><table id="pos-am-table"></table></div></div>
-        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><p class="note"><span class="pos-formula">Takeaway GMV 包 MKT fund 同 RM discount。</span><span class="pos-notarget"></span></p>
+        <div class="card"><h3>DM target achievement</h3><span class="per" data-per="pos" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下有 target 嘅舖加埋</li><li><b>Current ach.</b> = Σ POS GMV（月初至今）÷ Σ 全月 target</li><li><b>Projected ach.</b> = 按月初至今推算嘅全月 GMV ÷ Σ target</li><li><span class="pos-ex"></span></li></ul><div class="scroll"><table id="pos-dm-table"></table></div></div>
+        <div class="card"><h3>AM target achievement</h3><span class="per" data-per="pos" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 AM 旗下有 target 嘅舖加埋（計法同 DM 表一樣）</li><li>冇 target 嘅舖唔計，所以個別 AM 會同 Tableau 有少少唔同</li><li><span class="pos-ex"></span></li></ul><div class="scroll"><table id="pos-am-table"></table></div></div>
+        <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><span class="per" data-per="pos" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖；GMV 係月初至今，Target 係全月</li><li><span class="pos-formula">Takeaway GMV 包 MKT fund 同 RM discount。</span></li><li><span class="pos-notarget"></span></li></ul>
           <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="pos-table"></table></div></div>
       </div>
       <div class="grid" id="red-body">
-        <div class="card"><h3>Redemption (with x1.2 &amp; x1.5) by SKU</h3><p class="note" id="red-note"></p><div class="scroll"><table id="red-sku-table"></table></div></div>
-        <div class="card"><h3>Redemption (with x1.2 &amp; x1.5) by shop &amp; SKU</h3><p class="note">每間舖每隻 SKU 一行。Redemption amount = GMV after − GMV before（即係 x1.2 / x1.5 多咗計嘅 GMV）。</p>
+        <div class="card"><h3>Redemption (with x1.2 &amp; x1.5) by SKU</h3><span class="per" data-per="red" hidden></span><p class="note" id="red-note"></p><div class="scroll"><table id="red-sku-table"></table></div></div>
+        <div class="card"><h3>Redemption (with x1.2 &amp; x1.5) by shop &amp; SKU</h3><span class="per" data-per="red" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖一隻 SKU</li><li><b>Redemption amount</b> = GMV after − GMV before（即 x1.2 / x1.5 多咗計嘅 GMV）</li></ul>
           <div class="ctrl"><select id="red-am-filter" aria-label="Filter by AM"></select><select id="red-sku-filter" aria-label="Filter by SKU"></select><input id="red-search" type="search" placeholder="搜尋舖號、SKU 或貨品名" aria-label="Search"></div>
           <div class="scroll"><table id="red-table"></table></div></div>
       </div>
@@ -318,12 +324,12 @@
         <dt>Net Sale</dt><dd>Store GMV − Promotion discount</dd>
       </dl>
       <div class="grid">
-        <div class="card"><h3>Manual discount by DM</h3><p class="note">DM / AM / Total 嘅 MD rate 用 Σ 計（加埋先除），唔係平均每間舖嘅 %。</p><div class="scroll"><table id="md-dm-table"></table></div></div>
-        <div class="card"><h3>Manual discount by AM</h3><p class="note">按 AM 加埋佢管嘅舖。</p><div class="scroll"><table id="md-am-table"></table></div></div>
-        <div class="card"><h3>Manual discount by shop</h3><p class="note">可以揀 AM 或者搜尋舖號、舖名。撳欄名可以排序。</p>
+        <div class="card"><h3>Manual discount by DM</h3><span class="per" data-per="md" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下所有舖加埋（全部類別）</li><li><b>MD rate</b> = Σ Manual discount ÷（Σ GMV + Σ Manual discount），唔係平均每間舖嘅 %</li></ul><div class="scroll"><table id="md-dm-table"></table></div></div>
+        <div class="card"><h3>Manual discount by AM</h3><span class="per" data-per="md" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 AM 旗下所有舖加埋（全部類別）；MD rate 計法同 DM 表</li></ul><div class="scroll"><table id="md-am-table"></table></div></div>
+        <div class="card"><h3>Manual discount by shop</h3><span class="per" data-per="md" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖（全部類別）</li><li>可以揀 AM 或者搜尋舖號、舖名；撳欄名可以排序</li></ul>
           <div class="ctrl"><select id="md-am-filter" aria-label="Filter by AM"></select><input id="md-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="md-table"></table></div></div>
-        <div class="card" id="md-fruit-card" hidden><h3>Manual discount — Fruits（pos_category_type = Fruits）</h3><p class="note"><b>淨係計 Fruits 類別。</b>跟上面嘅 AM 篩選同搜尋。<b style="color: var(--bad)">紅色</b> = Fruits MD rate 高過整體 Fruits MD rate 1.5 倍。</p>
+        <div class="card" id="md-fruit-card" hidden><h3>Manual discount — Fruits（pos_category_type = Fruits）</h3><span class="per" data-per="md" hidden></span><ul class="note-list"><li><b>淨係計 Fruits 類別</b>；每行 = 一間舖</li><li><b>Fruits MD rate</b> = Fruits manual discount ÷（Fruits GMV + Fruits manual discount）；<b style="color: var(--bad)">紅色</b> = 高過整體 1.5 倍</li><li><b>Fruits share of shop MD</b> = Fruits manual discount ÷ 該舖全部 manual discount</li><li>跟上面 Manual discount by shop 嘅 AM 篩選同搜尋</li></ul>
           <div class="scroll"><table id="md-fruit-table"></table></div></div>
       </div>
     </div>
@@ -348,13 +354,13 @@
         <dt>Target</dt><dd>「Disposal Rate Target」tab 嘅 Overall 行；<b style="color: var(--bad)">紅色</b> = 高過 target，<b style="color: var(--good)">綠色</b> = 未超 target</dd>
       </dl>
       <div class="grid">
-        <div class="card"><h3>Disposal by DM</h3><p class="note">合計用 Σ 計（加埋先除）。</p><div class="scroll"><table id="disp-dm-table"></table></div></div>
-        <div class="card"><h3>Disposal by AM</h3><p class="note">按 AM 加埋佢管嘅舖。</p><div class="scroll"><table id="disp-am-table"></table></div></div>
-        <div class="card"><h3>Disposal by UM / SS</h3><p class="note">UM / SS 跟 sheet 嘅「UM/SM」欄。</p><div class="scroll"><table id="disp-um-table"></table></div></div>
-        <div class="card"><h3>Disposal by shop</h3><p class="note">可以揀 AM 或者搜尋舖號、舖名。撳欄名可以排序。</p>
+        <div class="card"><h3>Disposal by DM</h3><span class="per" data-per="disp" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下所有舖加埋（全部類別）</li><li><b>Rate</b> = Σ cost ÷ Σ GMV（加埋先除）</li></ul><div class="scroll"><table id="disp-dm-table"></table></div></div>
+        <div class="card"><h3>Disposal by AM</h3><span class="per" data-per="disp" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 AM 旗下所有舖加埋（全部類別）；rate 計法同 DM 表</li></ul><div class="scroll"><table id="disp-am-table"></table></div></div>
+        <div class="card"><h3>Disposal by UM / SS</h3><span class="per" data-per="disp" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 UM / SS 負責嘅舖加埋（跟 PED sheet「UM/SM」欄）</li></ul><div class="scroll"><table id="disp-um-table"></table></div></div>
+        <div class="card"><h3>Disposal by shop</h3><span class="per" data-per="disp" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖（全部類別）</li><li>可以揀 AM 或者搜尋舖號、舖名；撳欄名可以排序</li></ul>
           <div class="ctrl"><select id="disp-am-filter" aria-label="Filter by AM"></select><input id="disp-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="disp-table"></table></div></div>
-        <div class="card"><h3>Disposal by category</h3><p class="note">來自「Overall Summary」每間舖每隻 SKU 加埋，跟上面 AM 篩選同 Shop tier；Target 係該類別嘅 target。</p><div class="scroll"><table id="disp-type-table"></table></div></div>
+        <div class="card"><h3>Disposal by category</h3><span class="per" data-per="disp" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 POS 類別（PED「Overall Summary」每間舖每隻 SKU 加埋）</li><li><b>Target</b> = 該類別嘅 disposal rate target</li><li>跟上面 Disposal by shop 嘅 AM 篩選同 Shop tier</li></ul><div class="scroll"><table id="disp-type-table"></table></div></div>
       </div>
     </div>
   </section>
@@ -376,9 +382,9 @@
         <dt>Projected</dt><dd>按月初至今推算全月；Projected ach. = Projected GMV ÷ Target，<b style="color: var(--good)">綠色</b> = 預計達標，<b style="color: var(--bad)">紅色</b> = 低過 80%</dd>
       </dl>
       <div class="grid">
-        <div class="card"><h3>DM target achievement</h3><p class="note">合計用 Σ 計（加埋先除）。</p><div class="scroll"><table id="pu-dm-table"></table></div></div>
-        <div class="card"><h3>Pickup by AM</h3><p class="note">按 AM 加埋佢管嘅舖。</p><div class="scroll"><table id="pu-am-table"></table></div></div>
-        <div class="card"><h3>Pickup by shop</h3><p class="note">可以揀 AM 或者搜尋舖號、舖名。撳欄名可以排序。</p>
+        <div class="card"><h3>DM target achievement</h3><span class="per" data-per="pickup" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下有 target 嘅舖加埋</li><li><b>Current ach.</b> = Σ Pick-up GMV（月初至今）÷ Σ 全月 target；<b>Projected ach.</b> = 推算全月 ÷ target</li></ul><div class="scroll"><table id="pu-dm-table"></table></div></div>
+        <div class="card"><h3>Pickup by AM</h3><span class="per" data-per="pickup" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 AM 旗下有 target 嘅舖加埋；計法同 DM 表</li></ul><div class="scroll"><table id="pu-am-table"></table></div></div>
+        <div class="card"><h3>Pickup by shop</h3><span class="per" data-per="pickup" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖；GMV 係月初至今，Target 係全月</li><li>可以揀 AM 或者搜尋舖號、舖名；撳欄名可以排序</li></ul>
           <div class="ctrl"><select id="pu-am-filter" aria-label="Filter by AM"></select><input id="pu-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
           <div class="scroll"><table id="pu-table"></table></div></div>
       </div>
@@ -391,6 +397,7 @@
       <div class="ctrl"><select id="um-dm-filter" aria-label="Filter by DM"></select><select id="um-am-filter" aria-label="Filter by AM"></select></div>
       <div class="card shot">
         <h3 id="um-title">UM / SS KPI</h3>
+        <span class="per" data-per="umss" hidden></span>
         <p class="note" id="um-note"></p>
         <div class="scroll"><table id="um-table"></table></div>
         <div class="scroll"><table class="um-defs" id="um-defs"></table></div>
@@ -400,18 +407,19 @@
 
   <!-- POS offline: shop x SKU sales from the PED 'Overall Summary' sheet, for DM / AM to download (Vivian, 4/11/2026) -->
   <section class="pane" id="offline" role="tabpanel" aria-labelledby="tab-offline" hidden>
+    <div class="stamp" id="stamp-offline"></div>
     <div class="sec">
       <p class="note" id="off-note">載入緊……</p>
       <div class="ctrl"><select id="off-dm" aria-label="Filter by DM"></select><select id="off-am" aria-label="Filter by AM"></select><select id="off-um" aria-label="Filter by UM / SS"></select><select id="off-shop" aria-label="Filter by shop"></select><select id="off-cat" aria-label="Filter by POS category"></select><input id="off-search" type="search" placeholder="搜尋 SKU 或貨品名" aria-label="Search SKU"></div>
       <div class="tiles" id="off-kpis"></div>
       <div class="grid">
-        <div class="card" id="off-tab-card" hidden><h3>完整 by shop by SKU — 下載（Tableau）</h3><p class="note" id="off-tab-dl-note"></p>
-          <div class="dl-row"><a class="dl" id="off-tab-dl" href="#" target="_blank" rel="noopener">下載完整 by shop by SKU CSV（Tableau）</a></div></div>
-        <div class="card"><h3>By shop by SKU sales — 下載</h3><p class="note" id="off-dl-note"></p>
+        <div class="card" id="off-tab-card" hidden><h3>完整 by shop by SKU — 下載（Tableau）</h3><span class="per" data-per="offline" hidden></span><p class="note" id="off-tab-dl-note"></p>
+          <div class="dl-row"><a class="dl" id="off-tab-view" href="#" target="_blank" rel="noopener">喺 Tableau 開（Download → Crosstab → Excel）</a>&nbsp;<a class="dl" id="off-tab-dl" href="#" target="_blank" rel="noopener">下載 CSV（UTF-8）</a></div></div>
+        <div class="card"><h3>By shop by SKU sales — 下載（PED）</h3><span class="per" data-per="ped" hidden></span><p class="note" id="off-dl-note"></p>
           <div class="dl-row"><button type="button" class="dl" id="off-dl">下載 PED by shop by SKU CSV</button></div></div>
-        <div class="card"><h3>Sales by shop</h3><p class="note">跟上面嘅篩選。撳欄名可以排序。</p><div class="scroll"><table id="off-shop-table"></table></div></div>
-        <div class="card" id="off-cat-card" hidden><h3>Sales by category</h3><p class="note">跟上面嘅 DM / AM / 舖篩選。</p><div class="scroll"><table id="off-cat-table"></table></div></div>
-        <div class="card"><h3>Top SKU</h3><p class="note" id="off-sku-note">跟上面嘅篩選，按 GMV 由高至低，最多顯示 200 隻；全部 SKU 請用上面「下載」。</p><div class="scroll"><table id="off-sku-table"></table></div></div>
+        <div class="card"><h3>Sales by shop</h3><span class="per" data-per="offline" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖（POS takeaway，月初至今）</li><li>跟上面嘅 DM / AM / 舖 / 類別篩選；撳欄名可以排序</li></ul><div class="scroll"><table id="off-shop-table"></table></div></div>
+        <div class="card" id="off-cat-card" hidden><h3>Sales by category</h3><span class="per" data-per="offline" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 pos_category_type；<b>GMV share</b> = 佔總 GMV 幾多 %</li><li>跟上面嘅 DM / AM / 舖篩選</li></ul><div class="scroll"><table id="off-cat-table"></table></div></div>
+        <div class="card"><h3>Top SKU</h3><span class="per" data-per="offline" hidden></span><p class="note" id="off-sku-note">跟上面嘅篩選，按 GMV 由高至低，最多顯示 200 隻；全部 SKU 請用上面「下載」。</p><div class="scroll"><table id="off-sku-table"></table></div></div>
       </div>
     </div>
   </section>
@@ -420,6 +428,7 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  const escH = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
   let DATA = null, PW = null, SKU = null, skuLoading = false;
   let scope = 'ex';
@@ -877,7 +886,9 @@
       { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true },
       { key: 'vs_avg', label: 'Proj. DOP vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
     ]);
-    $('shop-count').textContent = `顯示 ${rows.length} 間舖。撳欄名可以排序。TM / GP = 前線 TM cost ÷ (POS GPA + pickup GPA)。以每間舖平均做 baseline，「vs avg」顯示每間舖高過或低過平均幾多。「Excl. Outlet & EPR」唔計 SWH、CHE 同 EPR。`;
+    $('shop-count').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一間舖（顯示緊 ${rows.length} 間）；<b>(Actual)</b> = 月初至今實數，<b>(Proj.)</b> = 全月預計</li>
+      <li><b>TM / GP</b> = Frontline TM cost ÷（POS GPA + Pickup GPA）</li><li><b>DOP (Proj.) vs avg</b> = 該舖 Proj. DOP − 平均每間舖（最底 Avg 行）</li>
+      <li>「Excl. Outlet &amp; EPR」唔計 SWH、CHE 同 EPR；撳欄名可以排序</li></ul>`;
 
   }
 
@@ -924,7 +935,7 @@
     const exTxt = noTarget.length ? `唔計 ${noTarget.join('、')}（冇 target）` : '';
     document.querySelectorAll('.pos-notarget').forEach((el) => { el.textContent = noTarget.length ? `今個月冇 target 嘅舖（${noTarget.join('、')}）只列出參考，唔計入任何合計。` : '今個月全部舖都有 target，全部計入合計。'; });
     document.querySelectorAll('.pos-ex').forEach((el) => { el.textContent = noTarget.length ? ` 達標 % 已剔除 ${noTarget.join('、')}（今個月冇 target）。` : ''; });
-    $('pos-note').textContent = `來自 Tableau（O2O Report › Shop Monthly Target），${P.period}。` + (noTarget.length ? ` ${noTarget.join('、')} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）。` : '');
+    $('pos-note').innerHTML = '<ul class="note-list"><li><b>來源</b>：Tableau（O2O Report › Shop Monthly Target）</li>' + (noTarget.length ? `<li>${escH(noTarget.join('、'))} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）</li>` : '') + '</ul>';
     tiles($('pos-kpis'), [
       ['POS GMV target', fmtK(t.target), { hint: '全月' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: '月初至今' + (exTxt ? `，${exTxt}` : '') }],
       ['Current achievement', fmtP(t.current_ach), { hint: exTxt }], ['Projected POS GMV', fmtK(t.proj_gmv)],
@@ -971,7 +982,7 @@
     const tot = { sku_id: 'Total', sku_name: '', _pin: true, _cls: 'tot', shops: new Set(all.map((r) => r.shop_code)).size, ...Object.fromEntries(sumCols.map((k) => [k, d3.sum(bySku, (r) => r[k])])) };
     const share = (r) => tot.redemption ? r.redemption / tot.redemption : null;
     const maxRed = d3.max(bySku, (r) => r.redemption) || 0;
-    $('red-note').textContent = `來自 Tableau（O2O Report › Redemption(with x1.2 & x1.5) by SKU）${R.period ? '，' + R.period : ''}。每隻 SKU 將所有舖加埋。Shops = 期內有賣過呢隻 SKU 嘅舖數（冇賣過嘅舖唔計）；Share = 佔總 redemption 幾多 %。`;
+    $('red-note').innerHTML = '<ul class="note-list"><li><b>每行</b> = 一隻 SKU，所有舖加埋（來源：Tableau Redemption(with x1.2 &amp; x1.5) by SKU）</li><li><b>Shops</b> = 期內有賣過呢隻 SKU 嘅舖數（冇賣過嘅舖唔計）</li><li><b>Share</b> = 佔總 redemption 幾多 %</li></ul>';
     drawTable($('red-sku-table'), bySku.concat(bySku.length ? [tot] : []), [
       { key: 'sku_id', label: 'SKU', freeze: true }, { key: 'sku_name', label: 'SKU name', cls: 'l', freeze: true },
       { key: 'mult', label: 'Multiplier', get: (r) => r._pin ? '' : (String(r.mult).includes('/') ? r.mult : multTxt(r.mult)) }, { key: 'period', label: 'Promotion period', cls: 'l' },
@@ -1035,7 +1046,8 @@
     const T = sum(inTier);
     const noTeam = all.filter((r) => r.am === '—').map((r) => r.shop_code);
     $('md-defs-tab').hidden = RAW; $('md-defs-raw').hidden = !RAW; $('md-fruit-card').hidden = !RAW;
-    $('md-note').textContent = (RAW ? `來自 PED sheet「${M.tab}」，只計 Promotion label = MANUAL 嘅折扣，${M.period}。POS GMV 來自同一份 sheet 嘅「Overall Summary」${M.gmv_as_of ? '（' + M.gmv_as_of + '）' : ''}。包括全部舖（連 outlet 同 EPR）。` : `來自 Tableau（O2O Report › Manual Discount › Shop View），${M.period}。包括全部舖（連 outlet 同 EPR）。`) + (noTeam.length ? ` ${noTeam.join('、')} 喺 POS / DOP Sheet 搵唔到 AM，所以 AM / DM 表顯示「—」。` : '');
+    $('md-note').innerHTML = '<ul class="note-list">' + (RAW ? `<li><b>來源</b>：PED sheet「${escH(M.tab)}」，<b>只計 Promotion label = MANUAL</b>；POS GMV 來自同一份 sheet 嘅「Overall Summary」</li>` : '<li><b>來源</b>：Tableau（O2O Report › Manual Discount › Shop View）</li>') +
+      '<li>包括全部舖（連 outlet 同 EPR）</li>' + (noTeam.length ? `<li>${escH(noTeam.join('、'))} 喺 POS / DOP sheet 搵唔到 AM，AM / DM 表顯示「—」</li>` : '') + '</ul>';
     if (RAW) tiles($('md-kpis'), [
       ['POS GMV', fmtK(T.gmv), { hint: '月初至今' }], ['Manual discount', fmtK(T.md), { hint: `${T.shops} 間舖` }],
       ['MD rate', fmtP(T.md_rate), { hint: 'MD ÷（GMV + MD）' }], ['Avg MD per shop', fmtK(T.md_per_shop)],
@@ -1105,7 +1117,7 @@
     const sum = (rows) => { const o = { shops: rows.length }; KEYS.forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); });
       const r = (k) => o.gmv ? o[k] / o.gmv : null; o.rate = r('total'); o.shop_rate = r('shop_cost'); o.st_rate = r('st_cost'); o.dam_rate = r('dam_cost'); return o; };
     const T = sum(inTier);
-    $('disp-note').textContent = `來自「PED Disposal+Discount+GP (Disposal bot)」sheet 嘅「By Shop」tab（每日 12:45 更新，數據計到尋日）${(DATA.ped || {}).as_of ? '，' + DATA.ped.as_of : ''}。包括全部舖（連 outlet 同 EPR）。`;
+    $('disp-note').innerHTML = '<ul class="note-list"><li><b>來源</b>：「PED Disposal+Discount+GP (Disposal bot)」sheet 嘅「By Shop」tab</li><li>包括全部舖（連 outlet 同 EPR）；cost 未扣 supplier claim</li></ul>';
     const over = (t) => (v) => v == null || t == null ? '' : (v > t ? 'neg' : 'pos');
     tiles($('disp-kpis'), [
       ['Total Disposal Cost', fmtK(T.total), { hint: `${T.shops} 間舖` }],
@@ -1393,11 +1405,34 @@
     stamp('stamp-tm', [[L.src + '（Google Sheet：TM cost）', st.tm_sheet_updated ? `${st.tm_sheet_updated} HKT（每日上午約 9:45 更新）` : '每日上午 9:45'], [L.per, period(tmTo)], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
     const P = DATA.pos || {}, M = DATA.md || {};
     stamp('stamp-pos', [[L.src + '（Tableau）', '每日上午約 9:00' + (P.tableau_updated ? `（今次：${P.tableau_updated}）` : '')], [L.per, P.period], [L.imp, P.exported_at], [L.upd, DATA.generated_at]]);
-    stamp('stamp-disp', [[L.src + '（PED Disposal sheet）', '每日 12:45（數據計到尋日）'], [L.per, (DATA.ped || {}).as_of || ''], [L.upd, DATA.generated_at]]);
     if (M.source === 'raw') stamp('stamp-md', [[L.src + `（PED sheet：${M.tab}）`, '每日 12:45（數據計到尋日）'], [L.per, M.period], [L.upd, DATA.generated_at]]);
     else stamp('stamp-md', [[L.src + '（Tableau）', '每日上午約 9:00' + (M.tableau_updated ? `（今次：${M.tableau_updated}）` : '')], [L.per, M.period], [L.imp, M.exported_at], [L.upd, DATA.generated_at]]);
     const PU = DATA.pickup || {};
     stamp('stamp-pickup', [[L.src + '（Tableau）', '每日上午約 9:00'], [L.per, PU.period], [L.imp, PU.exported_at], [L.upd, DATA.generated_at]]);
+    // ---- 數據期間 line under every table title (Vivian, 6/11/2026: state the data period of each table clearly)
+    const dash = (x) => String(x || '').replace(/\s+-\s+/, ' – ');
+    const yr = (String(DATA.month || '').match(/\d{4}/) || [String(DATA.generated_at || '').slice(0, 4)])[0];
+    const MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const mIdx = MON.findIndex((m) => String(DATA.month || '').toLowerCase().startsWith(m));
+    const mm = String((mIdx >= 0 ? mIdx : 0) + 1).padStart(2, '0');
+    const fullMonth = mIdx >= 0 ? `01/${mm}/${yr} – ${String(new Date(+yr, mIdx + 1, 0).getDate()).padStart(2, '0')}/${mm}/${yr}` : '';
+    const pedAs = (() => { const m = String((DATA.ped || {}).as_of || '').match(/As of (\d{1,2}) ([A-Za-z]{3})/i); if (!m) return ''; const mi = MON.indexOf(m[2].toLowerCase()); return mi < 0 ? '' : `01/${String(mi + 1).padStart(2, '0')}/${yr} – ${m[1].padStart(2, '0')}/${String(mi + 1).padStart(2, '0')}/${yr}`; })();
+    const act = (x) => x ? `${x}（月初至今實數）` : '';
+    const both = (a) => a ? `Actual ${a}（月初至今）｜Proj. ${fullMonth}（全月預計）` : '';
+    const hist = Object.keys(DATA.tm_hist || {}).sort(); const isoD = (x) => `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}`;
+    const OT = DATA.offline_t || {};
+    const PERI = {
+      dop_both: both(period(salesTo)), dop_proj: fullMonth ? `${fullMonth}（全月預計，用 ${period(salesTo)} 實數推算）` : '',
+      tm_act: act(period(tmTo)), tm_proj: fullMonth ? `${fullMonth}（全月預計）` : '', tm_both: both(period(tmTo)),
+      tm_hist: hist.length ? `每日記錄 ${isoD(hist[0])} – ${isoD(hist[hist.length - 1])}（每個數都係嗰日嘅全月預計）` : '',
+      pos: P.period ? `${dash(P.period)}（GMV 月初至今；Target 同 Projected 係全月）` : '',
+      red: act(dash((DATA.redemption || {}).period)), pickup: PU.period ? `${dash(PU.period)}（GMV 月初至今；Target 同 Projected 係全月）` : '',
+      md: act(dash(M.period)), disp: act(pedAs || (DATA.ped || {}).as_of), offline: act(dash(OT.period)), ped: act(pedAs),
+      umss: [pedAs && `Disposal / Fruit ${pedAs}`, period(tmTo) && `TM ${period(tmTo)}`, P.period && `POS ${dash(P.period)}`, PU.period && `Pickup ${dash(PU.period)}`].filter(Boolean).join('｜') + '（全部月初至今；Proj. 係全月）',
+    };
+    document.querySelectorAll('.per[data-per]').forEach((el) => { const v = PERI[el.dataset.per]; el.hidden = !v; el.replaceChildren(); if (v) { const b = document.createElement('b'); b.textContent = '數據期間：'; el.append(b, v); } });
+    if (DATA.offline_t) stamp('stamp-offline', [[L.src + '（Tableau：POS Takeaway by Shop by SKU Sales）', '每日 09:52 讀取'], [L.per, dash(OT.period)], [L.imp, OT.exported_at], [L.upd, DATA.generated_at]]);
+    stamp('stamp-disp', [[L.src + '（PED Disposal sheet）', '每日 12:45（數據計到尋日）'], [L.per, pedAs || (DATA.ped || {}).as_of || ''], [L.upd, DATA.generated_at]]);
   }
 
 
@@ -1415,7 +1450,7 @@
       ['target', 'non_senior', 'senior_webcart', 'senior_non_webcart', 'pickup_gmv', 'proj_gmv'].forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); });
       o.current_ach = achOf(d3.sum(t, (r) => r.pickup_gmv || 0), o.target); o.proj_ach = achOf(d3.sum(t, (r) => r.proj_gmv || 0), o.target); return o; };
     const T = sm(all);
-    $('pu-note').textContent = `來自 Tableau（O2O Report › Shop Pick-up），${P.period || ''}。冇 target 嘅舖唔計入達標 %。`;
+    $('pu-note').innerHTML = '<ul class="note-list"><li><b>來源</b>：Tableau（O2O Report › Shop Pick-up）</li><li>冇 target 嘅舖唔計入達標 %</li></ul>';
     tiles($('pu-kpis'), [
       ['Pick-up Target', fmtK(T.target), { hint: '全月' }], ['Total Pick-up GMV', fmtK(T.pickup_gmv), { hint: '月初至今' }],
       ['Current achievement', fmtP(T.current_ach)], ['Projected Pick-up GMV', fmtK(T.proj_gmv)],
@@ -1488,7 +1523,7 @@
     const tmTone = (r) => r.tm_p == null || r.tm_t == null ? '' : (r.tm_p > r.tm_t ? 'neg' : 'pos');
     const scope = umAm.value || umDm.value || 'All';
     $('um-title').textContent = `UM / SS KPI — ${scope}（${DATA.month || ''}）`;
-    $('um-note').textContent = `每個 UM / SS 一行，計佢負責嘅舖（UM / SS 跟「${(DATA.month || '').split(' ')[0].slice(0, 3)} TM cost target」tab）。最底 Total = 上面全部 UM / SS 加埋，% 用加埋先除。Dashboard 更新：${DATA.generated_at}。`;
+    $('um-note').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一個 UM / SS，計佢負責嘅舖（跟「${escH((DATA.month || '').split(' ')[0].slice(0, 3))} TM cost target」tab）</li><li><b>Total</b> = 上面全部 UM / SS 加埋，% 用加埋先除</li><li>每個 KPI 嘅計法、來源同期間見表下面；Dashboard 更新：${escH(DATA.generated_at)}</li></ul>`;
     const G = '<b style="color: var(--good)">綠色</b>', R = '<b style="color: var(--bad)">紅色</b>';
     const esc = (x) => String(x || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const defs = [
@@ -1549,7 +1584,7 @@
     const a2 = a1.filter((r) => !fAm.value || r.am === fAm.value); fillSel(fShop, [...new Set(a2.map((r) => r.shop))].sort(), 'All shops');
     const a3 = a2.filter((r) => !fShop.value || r.shop === fShop.value); fillSel(fCat, [...new Set(OT.shops.map((r) => r.cat).filter(Boolean))].sort(), 'All categories');
     const rows = a3.filter((r) => !fCat.value || r.cat === fCat.value);
-    $('off-note').textContent = `來自 Tableau「O2O Report (Unhide Sheet) › POS Takeaway by Shop by SKU Sales」，${OT.period || ''}（每日 09:52 讀取，10:15 更新到 dashboard，數據計到尋日${OT.exported_at ? '；今次讀取：' + OT.exported_at : ''}）。Dashboard 顯示 by shop、by category 同 by SKU 嘅合計；每間舖每隻 SKU 嘅完整明細請用下面「下載」。`;
+    $('off-note').textContent = 'Dashboard 顯示 by shop、by category 同 by SKU 嘅合計；每間舖每隻 SKU 嘅完整明細請用下面「下載」。';
     const sm = (k, rs = rows) => d3.sum(rs, (r) => r[k] || 0);
     const q = $('off-search').value.trim().toLowerCase();
     const skus = OT.skus.filter((r) => (!fCat.value || r.cat === fCat.value) && (!q || `${r.sku} ${r.name} ${r.brand}`.toLowerCase().includes(q)));
@@ -1559,8 +1594,12 @@
     const dd = tabDates(OT.period);
     const url = 'https://inhouse-analytics.hktv.com.hk/views/O2OReportUnhideSheet/POSTakeawaybyShopbySKUSales.csv' + (dd ? `?Start%20Date=${dd[0]}&End%20Date=${dd[1]}` : '');
     $('off-tab-dl').href = url;
-    $('off-tab-dl-note').textContent = `由 Tableau 直接下載完整 by shop by SKU CSV（${OT.period || ''}，大約 1 萬行）。要用公司網絡同有 Tableau 帳戶，未登入會先叫你登入 Tableau。`;
-    $('off-dl-note').textContent = '冇 Tableau 帳戶可以用呢個：PED sheet「Overall Summary」嘅 by shop by SKU（包 manual discount 同 disposal；每日 13:00 更新，數字同 Tableau 有少少差距）。會跟上面嘅 DM / AM / 舖 / 類別篩選。';
+    $('off-tab-view').href = url.replace('.csv', '');
+    $('off-tab-dl-note').replaceChildren();
+    $('off-tab-dl-note').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一間舖一隻 SKU（大約 1 萬行），由 Tableau 直接下載；要用公司網絡同有 Tableau 帳戶</li>
+      <li><b>建議</b>：撳「喺 Tableau 開」→ 右上 <b>Download → Crosstab → Excel</b>，中文唔會亂碼</li>
+      <li>「下載 CSV（UTF-8）」用 Excel 直接開中文會<b>亂碼</b>：要喺 Excel 用 <b>資料 → 從文字/CSV</b>，檔案原點揀 <b>65001: Unicode (UTF-8)</b> 再載入</li></ul>`;
+    $('off-dl-note').innerHTML = '<ul class="note-list"><li>冇 Tableau 帳戶可以用呢個：PED sheet「Overall Summary」嘅 by shop by SKU，<b>包 manual discount 同 disposal</b></li><li>每日 13:00 更新；GMV 同 Tableau 有少少差距（唔同報表）</li><li>會跟上面嘅 DM / AM / 舖 / 類別篩選；用 Excel 直接開，中文正常</li></ul>';
     $('off-dl').onclick = async () => {
       if (!SKU) { $('off-dl').textContent = '載入緊……'; await loadSku(); $('off-dl').textContent = '下載 PED by shop by SKU CSV'; }
       if (!SKU || SKU.error) { $('off-dl-note').textContent = '未能載入 PED by shop by SKU 數據。'; return; }
@@ -1648,6 +1687,7 @@
     if (current === 'pickup') drawPickup();
     if (current === 'umss') drawUmss();
     if (current === 'offline') drawOffline();
+    document.querySelectorAll('ul.note-list li').forEach((li) => { li.hidden = !li.textContent.trim(); });  // hide empty remark lines
   }
   let rT; window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(draw, 150); });
 })();

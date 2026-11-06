@@ -865,12 +865,12 @@
     if (DATA.dop_src === 'dop_mtd') {
       ['proj_pos_gmv', 'proj_pos_gpa', 'proj_pickup_gpa', 'tm_plan', 'proj_disposal_cost', 'proj_other_mkt_cost'].forEach((c) => { avgRow[c] = rows.length ? d3.mean(rows, (r) => r[c] || 0) : null; });
       drawTable($('shop-table'), rows.length ? rows.concat([avgRow]) : rows, [
-        { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' },
+        { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true },
         ...DOP_ACT, { key: 'tm_to_gp', label: 'TM / GP (Actual)', fmt: fmtP, get: ratio }, ...DOP_PROJ,
         { key: 'vs_avg', label: 'DOP (Proj.) vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
       ]);
     } else drawTable($('shop-table'), rows.length ? rows.concat([avgRow]) : rows, [
-      { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' },
+      { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true },
       { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'pos_gp_pct', label: 'GP%', fmt: fmtP, flag: (r) => r.pos_gp_pct > GP_FLAG }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN },
       { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'disposal_cost', label: 'Disposal', fmt: fmtN }, { key: 'other_mkt_cost', label: 'Other & MKT', fmt: fmtN },
       { key: 'tm_to_gp', label: 'TM / GP', fmt: fmtP, get: ratio },
@@ -883,7 +883,7 @@
 
   function posCols(rows, detail) {
     const max = d3.max(rows, (r) => r.proj_ach || 0) || 0;
-    const c = [{ key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'target', label: 'Target', fmt: fmtN }];
+    const c = [{ key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'target', label: 'Target', fmt: fmtN }];
     // Nov 2026 on: same columns as Tableau "POS (pospay Delivery and POS)" (webcart no longer x2; frozen x1.5; redemption x1.2/x1.5)
     if (detail && (DATA.pos || {}).layout === 'nov') c.push({ key: 'takeaway_gmv', label: 'POS Takeaway GMV (incl. MKT fund & RM discount)', fmt: fmtN }, { key: 'delivery_gmv', label: 'POS Delivery GMV', fmt: fmtN },
       { key: 'frozen_gmv', label: 'Frozen SKU GMV (x1.5)', fmt: fmtN }, { key: 'redemption_gmv', label: 'Redemption (x1.2/x1.5)', fmt: fmtN });
@@ -1127,7 +1127,7 @@
     drawTable($('disp-dm-table'), group('dm'), [{ key: 'dm', label: 'DM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, ...cols]);
     drawTable($('disp-am-table'), group('am'), [{ key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, ...cols]);
     const um = group('um').map((r) => r._pin ? r : { ...r, am: (inTier.find((x) => x.um === r.um) || {}).am || '' });
-    drawTable($('disp-um-table'), um, [{ key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'shops', label: 'Shops', fmt: fmtN }, ...cols]);
+    drawTable($('disp-um-table'), um, [{ key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN }, ...cols]);
     const picked = dpAm.value; const ams = [...new Set(all.map((r) => r.am))].sort();
     if (dpAm.options.length !== ams.length + 1) { dpAm.replaceChildren(new Option('All AMs', ''), ...ams.map((a) => new Option(a, a))); dpAm.value = picked; }
     const q = dpSearch.value.trim().toLowerCase();
@@ -1135,7 +1135,7 @@
     const tot = { ...sum(rows), shop_code: 'Total', shop_name: `${rows.length} 間舖`, _pin: true, _cls: 'tot' };
     drawTable($('disp-table'), rows.concat(rows.length ? [tot] : []), [
       { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: 'am', label: 'AM', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.am }, { key: 'um', label: 'UM / SS', cls: 'l', get: (r) => r._pin ? '' : r.um }, ...cols]);
+      { key: 'am', label: 'AM', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.am }, { key: 'um', label: 'UM / SS', cls: 'l', freeze: true, get: (r) => r._pin ? '' : r.um }, ...cols]);
     // By category (Overall Summary), following the AM filter and tier
     const cats = new Map();
     rows.forEach((r) => Object.entries((PD.cats || {})[r.shop_code] || {}).forEach(([c, v]) => {
@@ -1367,7 +1367,7 @@
     const rows = shops.filter((r) => (!ttAm.value || r.am === ttAm.value) && (!q || `${r.shop_code} ${r.shop_name}`.toLowerCase().includes(q)));
     drawTable($('tt-shop-table'), rows.concat([{ ...agg(rows, { _pin: true, _cls: 'tot' }), shop_code: 'Total', shop_name: 'All shops shown' }]), cols([
       { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'um', label: 'UM / SS', cls: 'l' }]));
+      { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'um', label: 'UM / SS', cls: 'l', freeze: true }]));
   }
 
   const tierSel = document.getElementById('tier-filter');
@@ -1504,7 +1504,7 @@
     $('um-defs').innerHTML = `<thead><tr>${defs[0].map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${defs.slice(1).map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`
       + `<tfoot><tr><td colspan="4" style="font-weight: 400; color: var(--muted); white-space: normal">冇 target 嘅舖唔計入達標 % 同 target。揀咗 Shop tier 時，TM target % 改用該批舖嘅 target 加埋計。</td></tr></tfoot>`;
     drawTable($('um-table'), rows.concat(rows.length ? [tot] : []), [
-      { key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l' }, { key: 'shops', label: 'Shops', fmt: fmtN },
+      { key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN },
       { key: 'disp_rate', label: 'Disposal rate', fmt: fmtP, tone: (v) => { const t = ((((PED.disp || {}).targets || {}).Overall) || {}).overall; return v == null || t == null ? '' : (v > t ? 'neg' : 'pos'); } },
       { key: 'fruit_disc', label: 'Fruit discount', fmt: fmtN }, { key: 'fruit_rate', label: 'Fruit disc. %', fmt: fmtP },
       { key: 'tm_a', label: 'TM % (MTD)', fmt: fmtP }, { key: 'tm_p', label: 'TM % (Proj.)', fmt: fmtP },
@@ -1578,7 +1578,7 @@
       .map(([shop, o]) => ({ shop, ...o })).sort((a, b) => b.gmv - a.gmv);
     const tot = { shop: 'Total', shop_name: `${byShop.length} 間舖`, _pin: true, _cls: 'tot', gmv: sm('gmv'), qty: sm('qty'), refund: sm('refund') };
     drawTable($('off-shop-table'), byShop.concat(byShop.length ? [tot] : []), [{ key: 'shop', label: 'Shop', freeze: true }, { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: 'am', label: 'AM', cls: 'l' }, ...nums]);
+      { key: 'am', label: 'AM', cls: 'l', freeze: true }, ...nums]);
     const byCat = d3.rollups(rows, (v) => ({ shops: new Set(v.map((r) => r.shop)).size, gmv: sm('gmv', v), qty: sm('qty', v), refund: sm('refund', v) }), (r) => r.cat)
       .map(([cat, o]) => ({ cat, ...o, share: tot.gmv ? o.gmv / tot.gmv : null })).sort((a, b) => b.gmv - a.gmv);
     drawTable($('off-cat-table'), byCat.concat(byCat.length ? [{ cat: 'Total', _pin: true, _cls: 'tot', gmv: tot.gmv, qty: tot.qty, refund: tot.refund, share: 1 }] : []),
@@ -1623,7 +1623,7 @@
     const tot = { shop: 'Total', shop_name: `${byShop.length} 間舖`, _pin: true, _cls: 'tot', skus: new Set(rows.map((r) => r.sku)).size,
       ...Object.fromEntries(['gmv', 'qty', 'disc', 'disp_qty', 'disp_cost'].map((k) => [k, sm(k)])) };
     drawTable($('off-shop-table'), byShop.concat(byShop.length ? [tot] : []), [{ key: 'shop', label: 'Shop', freeze: true }, { key: 'shop_name', label: 'Name', cls: 'l', freeze: true },
-      { key: 'am', label: 'AM', cls: 'l' }, { key: 'um', label: 'UM / SS', cls: 'l' }, { key: 'skus', label: 'SKU', fmt: fmtN }, ...nums]);
+      { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'skus', label: 'SKU', fmt: fmtN }, ...nums]);
     const bySku = d3.rollups(rows, (v) => ({ name: v[0].name, cat: v[0].cat, shops: new Set(v.map((r) => r.shop)).size,
       ...Object.fromEntries(['gmv', 'qty', 'disc', 'disp_qty', 'disp_cost'].map((k) => [k, d3.sum(v, (r) => r[k] || 0)])) }), (r) => r.sku)
       .map(([sku, o]) => ({ sku, ...o })).sort((a, b) => b.gmv - a.gmv).slice(0, 200);

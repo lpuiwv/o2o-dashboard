@@ -1389,7 +1389,7 @@
     stamp('stamp-dop', [[L.src + (DATA.dop_src === 'dop_mtd' ? `（Google Sheet：${DATA.dop_tab}）` : '（Google Sheet）'), '每日下午 2:00'], [L.per, period(salesTo) + (costs && costs !== salesTo ? `（成本計到 ${costs}）` : '')], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
     // TM period = the TM cost sheet's own 「實數（截至 D/M）」 (Vivian, 6/11/2026: it used the DOP 'Raw' tab's last day, which only moves at 2pm)
     const tv = st.tm_version || ''; const tvm = tv.match(/^(\d{1,2})\/(\d{1,2})$/);
-    const tmTo = tvm ? `${tvm[1]}/${tvm[2]}/${String(DATA._tm_month || '').slice(0, 4)}` : (/^\d{4}-\d{2}-\d{2}$/.test(tv) ? `${tv.slice(8)}/${tv.slice(5, 7)}/${tv.slice(0, 4)}` : lastDay);
+    const tmTo = tvm ? `${tvm[1]}/${tvm[2]}/${(String(DATA.month || '').match(/\d{4}/) || [String(DATA.generated_at || '').slice(0, 4)])[0]}` : (/^\d{4}-\d{2}-\d{2}$/.test(tv) ? `${tv.slice(8)}/${tv.slice(5, 7)}/${tv.slice(0, 4)}` : lastDay);
     stamp('stamp-tm', [[L.src + '（Google Sheet：TM cost）', st.tm_sheet_updated ? `${st.tm_sheet_updated} HKT（每日上午約 9:45 更新）` : '每日上午 9:45'], [L.per, period(tmTo)], [L.imp, DATA.generated_at], [L.upd, DATA.generated_at]]);
     const P = DATA.pos || {}, M = DATA.md || {};
     stamp('stamp-pos', [[L.src + '（Tableau）', '每日上午約 9:00' + (P.tableau_updated ? `（今次：${P.tableau_updated}）` : '')], [L.per, P.period], [L.imp, P.exported_at], [L.upd, DATA.generated_at]]);

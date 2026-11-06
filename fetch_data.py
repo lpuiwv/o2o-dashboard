@@ -391,6 +391,35 @@ def fetch_pickup(get):
         return None
 
 
+def fetch_offline_tab(get):
+    """POS offline from Tableau "POS Takeaway by Shop by SKU Sales" (Vivian, 6/11/2026): the daily Tableau task (09:52) sums the
+    view into the POS sheet's 'POS offline by shop' (shop x pos_category_type) and 'POS offline by SKU' (SKU, all shops) tabs.
+    The full shop x SKU list (~10k rows) stays in Tableau: the dashboard links to its CSV export. Optional."""
+    try:
+        sh = get(POS_SHEET, "'POS offline by shop'!A1:H1000")
+        sk = get(POS_SHEET, "'POS offline by SKU'!A1:I1500")
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B24") if r}
+    except Exception as e:
+        print(f"POS offline tabs not read: {e}", file=sys.stderr)
+        return None
+    pad = lambda r, n: list(r) + [""] * (n - len(r))
+    shops = []
+    for r in (sh or [])[1:]:
+        r = pad(r, 8)
+        if str(r[2]).strip():
+            shops.append({"dm": str(r[0]).strip(), "am": str(r[1]).strip(), "shop": str(r[2]).strip(), "shop_name": str(r[3]).strip(),
+                          "cat": str(r[4]).strip(), "gmv": num(r[5]) or 0, "qty": num(r[6]) or 0, "refund": num(r[7]) or 0})
+    skus = []
+    for r in (sk or [])[1:]:
+        r = pad(r, 9)
+        if str(r[0]).strip():
+            skus.append({"sku": str(r[0]).strip(), "name": str(r[1]).strip(), "cat": str(r[2]).strip(), "brand": str(r[3]).strip(),
+                         "sub": str(r[4]).strip(), "gmv": num(r[5]) or 0, "qty": num(r[6]) or 0, "refund": num(r[7]) or 0, "shops": num(r[8]) or 0})
+    if not shops:
+        return None
+    return {"shops": shops, "skus": skus, "period": info.get("POS offline period", ""), "exported_at": info.get("POS offline exported at", "")}
+
+
 PED_SHOP_COLS = {"dm": "dm", "am": "am", "um": "um/sm", "shop_code": "shop code", "shop_name": "shop name",
                  "shop_cost": "shop disposal cost", "shop_rate": "shop disposal rate", "st_cost": "stocktake disposal cost",
                  "st_rate": "stocktake disposal rate", "dam_cost": "stock in dam + uom cost", "dam_rate": "stock in dam + uom rate",
@@ -695,7 +724,9 @@ def tm_stamps(raw):
     head, daily = cell_text(raw.get("tm_head")), cell_text(raw.get("tm_daily_head"))
     v = re.search(r"版本[：:]\s*(\d{4}-\d{2}-\d{2})", head) or re.search(r"截至\s*(\d{1,2}/\d{1,2})", head)
     g = re.search(r"產生[：:]\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2})", daily)
-    return {"tm_version": v.group(1) if v else "", "tm_daily_generated": g.group(1) if g else ""}
+    u = re.search(r"Last updated[：:]\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2})", head)  # 「🕒 Last updated: 2026-11-05 10:47 HKT」 in A1
+    return {"tm_version": v.group(1) if v else "", "tm_daily_generated": g.group(1) if g else "",
+            "tm_sheet_updated": u.group(1) if u else ""}
 
 
 def tm_actual_day(raw):
@@ -1008,6 +1039,7 @@ def fetch_all():
         "disposal": fetch_disposal(get),
         "redemption": fetch_redemption(get),
         "pickup": fetch_pickup(get),
+        "offline_t": fetch_offline_tab(get),
         "ped": ped, "_sku": sku,
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),

@@ -44,6 +44,8 @@
   @media (max-width: 600px) { .defs { grid-template-columns: 1fr; } .defs dd { margin-bottom: 4px; } }
   .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); }
   .tabs button { font: inherit; font-weight: 500; background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .tierbox + .tierbox { margin-left: 12px; }
+  .monthnote { border-left: 3px solid #b26b00; background: rgba(178,107,0,.08); padding: 6px 10px; margin: 8px 0; }
   .tierbox { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 4px 0; white-space: nowrap; }
   .tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
   .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -148,10 +150,13 @@
     <button role="tab" id="tab-discount" data-tab="discount" aria-selected="false">Manual Discount</button>
     <button role="tab" id="tab-disposal" data-tab="disposal" aria-selected="false">Disposal</button>
     <button role="tab" id="tab-umss" data-tab="umss" aria-selected="false">UM/SS KPI</button>
+    <span class="tierbox" id="month-bar" hidden><label class="note" for="month-filter">月份</label>
+    <select id="month-filter" aria-label="Month"></select></span>
     <span class="tierbox" id="tier-bar"><label class="note" for="tier-filter">Shop tier 篩選</label>
     <select id="tier-filter" aria-label="Filter by shop tier"><option value="">All tiers</option></select></span>
   </nav>
   <p class="note" id="tier-note"></p>
+  <div class="note monthnote" id="month-note" hidden></div>
 
   <!-- DOP -->
   <section class="pane" id="dop" role="tabpanel" aria-labelledby="tab-dop">
@@ -431,6 +436,7 @@
   const escH = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
   let DATA = null, PW = null, SKU = null, skuLoading = false;
+  let CUR = null; const MCACHE = {};  // CUR = current month's data; MCACHE = past months, loaded when picked (Vivian, 9/11/2026)
   let scope = 'ex';
   // Outlet shops and EPR, matching the sheet's 'Excl. Outlet & EPR' summary (SWH and CHE are outlets)
   const EXCLUDED = ['SWH', 'CHE', 'EPR'];
@@ -448,7 +454,7 @@
       const res = await fetch('data.enc.json?t=' + Date.now(), { cache: 'no-store' });
       if (!res.ok) throw new Error('nofile');
       DATA = await decrypt(await res.json(), pw);
-      PW = pw; SKU = null;
+      PW = pw; SKU = null; CUR = DATA; fillMonths();
       try { sessionStorage.setItem('o2o_pw', pw); } catch (e) {}
       $('lock').hidden = true; $('app').hidden = false;
       showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dop');
@@ -458,6 +464,41 @@
   }
   $('unlock').addEventListener('submit', (e) => { e.preventDefault(); $('err').textContent = ''; unlock($('pw').value, false); });
   try { const saved = sessionStorage.getItem('o2o_pw'); if (saved) unlock(saved, true); } catch (e) {}
+
+  // ---------- Month menu: one menu for the whole dashboard, current month first (Vivian, 9/11/2026) ----------
+  const monthSel = document.getElementById('month-filter');
+  function fillMonths() {
+    const ms = (CUR && CUR.months) || [];
+    document.getElementById('month-bar').hidden = ms.length < 2;
+    monthSel.replaceChildren(...ms.map((m) => new Option(m.key === 'current' ? `${m.label}（今個月）` : m.label, m.key)));
+    monthSel.value = 'current';
+  }
+  monthSel.addEventListener('change', async () => {
+    const k = monthSel.value;
+    let D = k === 'current' ? CUR : MCACHE[k];
+    if (!D) {
+      monthSel.disabled = true; $('month-note').hidden = false; $('month-note').textContent = '載入緊……';
+      try {
+        const res = await fetch(`data_${k}.enc.json?t=` + Date.now(), { cache: 'no-store' });
+        if (!res.ok) throw new Error('nofile');
+        D = MCACHE[k] = await decrypt(await res.json(), PW);
+      } catch (e) { D = null; }
+      monthSel.disabled = false;
+    }
+    if (!D) { monthSel.value = 'current'; DATA = CUR; draw(); $('month-note').hidden = false; $('month-note').textContent = '讀唔到呢個月嘅數據，顯示返今個月。'; return; }
+    DATA = D; SKU = k === 'current' ? null : { error: true };
+    draw();
+  });
+  function drawMonthNote() {
+    const el = $('month-note');
+    if (!DATA.past) { el.hidden = true; el.replaceChildren(); return; }
+    const items = [`而家睇緊 <b>${escH(DATA.month)}</b>（已完結月份；數據係月尾 snapshot，唔會再每日更新）。揀返「${escH((CUR || {}).month || '')}（今個月）」睇最新數據。`];
+    if (DATA.pos) items.push('POS / Pickup achievement：GMV 來自 Tableau（用嗰個月 01–尾日 篩選，Tableau 而家嘅 GMV 公式）；Target 來自「O2O Shop by month GMV Target & Actual」›「Target_Shop Version」嗰個月嘅欄（Tableau 揀舊月份都只會出今個月 target）。');
+    if (DATA.md && DATA.md.gmv_src === 'tableau') items.push('Manual Discount：MD 金額來自 PED「' + escH(DATA.md.tab || '') + '」（只計 MANUAL）；計 MD rate 嘅 GMV 用 Tableau Manual Discount › Shop View 嘅 Store GMV（PED「Overall Summary」只有今個月）。Fruits 冇 GMV，所以冇 Fruits MD rate。');
+    if (!(DATA.ped || {}).disp) items.push('Disposal、UM/SS KPI 嘅 Disposal / Fruit：PED sheet 只有今個月嘅「By Shop」/「Overall Summary」，要等 PED 出返呢個月先有。');
+    el.innerHTML = '<ul class="note-list">' + items.map((x) => `<li>${x}</li>`).join('') + '</ul>';
+    el.hidden = false;
+  }
 
   let current = 'dop';
   function showTab(name) {
@@ -1046,7 +1087,7 @@
     const T = sum(inTier);
     const noTeam = all.filter((r) => r.am === '—').map((r) => r.shop_code);
     $('md-defs-tab').hidden = RAW; $('md-defs-raw').hidden = !RAW; $('md-fruit-card').hidden = !RAW;
-    $('md-note').innerHTML = '<ul class="note-list">' + (RAW ? `<li><b>來源</b>：PED sheet「${escH(M.tab)}」，<b>只計 Promotion label = MANUAL</b>；POS GMV 來自同一份 sheet 嘅「Overall Summary」</li>` : '<li><b>來源</b>：Tableau（O2O Report › Manual Discount › Shop View）</li>') +
+    $('md-note').innerHTML = '<ul class="note-list">' + (RAW ? `<li><b>來源</b>：PED sheet「${escH(M.tab)}」，<b>只計 Promotion label = MANUAL</b>；${M.gmv_src === 'tableau' ? 'POS GMV 用 Tableau Manual Discount › Shop View 嘅 Store GMV（同一個月）' : 'POS GMV 來自同一份 sheet 嘅「Overall Summary」'}</li>` : '<li><b>來源</b>：Tableau（O2O Report › Manual Discount › Shop View）</li>') +
       '<li>包括全部舖（連 outlet 同 EPR）</li>' + (noTeam.length ? `<li>${escH(noTeam.join('、'))} 喺 POS / DOP sheet 搵唔到 AM，AM / DM 表顯示「—」</li>` : '') + '</ul>';
     if (RAW) tiles($('md-kpis'), [
       ['POS GMV', fmtK(T.gmv), { hint: '月初至今' }], ['Manual discount', fmtK(T.md), { hint: `${T.shops} 間舖` }],
@@ -1672,6 +1713,9 @@
 
   function draw() {
     if (!DATA) return;
+    drawMonthNote();
+    const dm = $('disp-missing').querySelector('p'); if (!dm.dataset.def) dm.dataset.def = dm.textContent;
+    dm.textContent = DATA.past ? `${DATA.month} 未有 Disposal 數據：PED Disposal sheet 嘅「By Shop」/「Overall Summary」只有今個月，要等 PED 出返 ${DATA.month} 嘅版本。` : dm.dataset.def;
     drawStamps();
     const tiers = [...new Set(Object.values(DATA.tiers || {}))].sort();
     if (tierSel.options.length !== tiers.length + 2) { const v = tierSel.value; tierSel.replaceChildren(new Option('All tiers', ''), ...tiers.map((x) => new Option(x, x)), new Option('No tier', 'No tier')); tierSel.value = v; }

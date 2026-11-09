@@ -420,8 +420,8 @@
       <div class="ctrl"><select id="off-dm" aria-label="Filter by DM"></select><select id="off-am" aria-label="Filter by AM"></select><select id="off-um" aria-label="Filter by UM / SS"></select><select id="off-shop" aria-label="Filter by shop"></select><select id="off-cat" aria-label="Filter by POS category"></select><input id="off-search" type="search" placeholder="搜尋 SKU 或貨品名" aria-label="Search SKU"></div>
       <div class="tiles" id="off-kpis"></div>
       <div class="grid">
-        <div class="card" id="off-tab-card" hidden><h3>完整 by shop by SKU — 下載（Tableau）</h3><span class="per" data-per="offline" hidden></span><p class="note" id="off-tab-dl-note"></p>
-          <div class="dl-row"><a class="dl" id="off-tab-view" href="#" target="_blank" rel="noopener">喺 Tableau 開（Download → Crosstab → Excel）</a>&nbsp;<a class="dl" id="off-tab-dl" href="#" target="_blank" rel="noopener">下載 CSV（UTF-8）</a></div></div>
+        <div class="card" id="off-tab-card" hidden><h3>完整 by shop by SKU — 下載（Tableau 數）</h3><span class="per" data-per="offline" hidden></span><p class="note" id="off-tab-dl-note"></p>
+          <div class="dl-row"><button type="button" class="dl" id="off-tab-dl">下載 by shop by SKU CSV</button></div></div>
         <div class="card"><h3>By shop by SKU sales — 下載（PED）</h3><span class="per" data-per="ped" hidden></span><p class="note" id="off-dl-note"></p>
           <div class="dl-row"><button type="button" class="dl" id="off-dl">下載 PED by shop by SKU CSV</button></div></div>
         <div class="card"><h3>Sales by shop</h3><span class="per" data-per="offline" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖（POS takeaway，月初至今）</li><li>跟上面嘅 DM / AM / 舖 / 類別篩選；撳欄名可以排序</li></ul><div class="scroll"><table id="off-shop-table"></table></div></div>
@@ -438,7 +438,7 @@
   const escH = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
   let DATA = null, PW = null, SKU = null, skuLoading = false;
-  let CUR = null; const MCACHE = {};  // CUR = current month's data; MCACHE = past months, loaded when picked (Vivian, 9/11/2026)
+  let CUR = null; const MCACHE = {}; const OFFSKU = {};  // CUR = current month's data; MCACHE = past months, loaded when picked (Vivian, 9/11/2026)
   let scope = 'ex';
   // Outlet shops and EPR, matching the sheet's 'Excl. Outlet & EPR' summary (SWH and CHE are outlets)
   const EXCLUDED = ['SWH', 'CHE', 'EPR'];
@@ -1642,15 +1642,39 @@
     const skus = OT.skus.filter((r) => (!fCat.value || r.cat === fCat.value) && (!q || `${r.sku} ${r.name} ${r.brand}`.toLowerCase().includes(q)));
     tiles($('off-kpis'), [['Total POS GMV', fmtK(sm('gmv')), { hint: '月初至今' }], ['Qty sold', fmtK(sm('qty'))], ['Refund value', fmtK(sm('refund'))],
       ['Shops', fmtN(new Set(rows.map((r) => r.shop)).size)], ['SKU', fmtN(skus.length), { hint: fCat.value || '全部類別' }]]);
-    // full shop x SKU list: Tableau CSV export for the same dates (needs a Tableau login on the company network)
-    const dd = tabDates(OT.period);
-    const url = 'https://inhouse-analytics.hktv.com.hk/views/O2OReportUnhideSheet/POSTakeawaybyShopbySKUSales.csv' + (dd ? `?Start%20Date=${dd[0]}&End%20Date=${dd[1]}` : '');
-    $('off-tab-dl').href = url;
-    $('off-tab-view').href = url.replace('.csv', '');
-    $('off-tab-dl-note').replaceChildren();
-    $('off-tab-dl-note').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一間舖一隻 SKU（大約 1 萬行），由 Tableau 直接下載；要用公司網絡同有 Tableau 帳戶</li>
-      <li><b>建議</b>：撳「喺 Tableau 開」→ 右上 <b>Download → Crosstab → Excel</b>，中文唔會亂碼</li>
-      <li>「下載 CSV（UTF-8）」用 Excel 直接開中文會<b>亂碼</b>：要喺 Excel 用 <b>資料 → 從文字/CSV</b>，檔案原點揀 <b>65001: Unicode (UTF-8)</b> 再載入</li></ul>`;
+    // full shop x SKU list (Tableau "POS Takeaway by Shop by SKU Sales", copied daily into the POS sheet; Vivian, 9/11/2026:
+    // dashboard users have no Tableau login) -> Excel-friendly CSV (UTF-8 with BOM), following the DM / AM / shop / category / search filters
+    $('off-tab-dl-note').innerHTML = DATA.offsku
+      ? `<ul class="note-list"><li><b>每行</b> = 一間舖一隻 SKU（POS takeaway，${escH(String(OT.period || '').replace(/\s+-\s+/, ' – '))}），Total POS GMV / QTY / Refund value 各一欄</li>
+      <li>數據來自 Tableau「POS Takeaway by Shop by SKU Sales」，每日自動抄入；<b>唔使 Tableau 帳戶</b></li>
+      <li>會跟上面嘅 DM / AM / 舖 / 類別篩選同搜尋；用 Excel 直接開，中文正常</li></ul>`
+      : '未有 by shop by SKU 數據（POS sheet「POS offline by shop by SKU」tab 未有數）。';
+    $('off-tab-dl').disabled = !DATA.offsku;
+    $('off-tab-dl').onclick = async () => {
+      const key = DATA.past ? `offsku_${DATA.month_key}` : 'offsku';
+      const btn = $('off-tab-dl'), label = btn.textContent;
+      let P = OFFSKU[key];
+      if (!P) {
+        btn.textContent = '載入緊……'; btn.disabled = true;
+        try { const res = await fetch(`${key}.enc.json?t=` + Date.now(), { cache: 'no-store' }); if (!res.ok) throw new Error('nofile'); P = OFFSKU[key] = await decrypt(await res.json(), PW); }
+        catch (e) { P = null; }
+        btn.textContent = label; btn.disabled = false;
+      }
+      if (!P) { $('off-tab-dl-note').textContent = '未能載入 by shop by SKU 數據。'; return; }
+      const q2 = $('off-search').value.trim().toLowerCase();
+      const out = P.rows.filter(([shop, sku]) => { const sh = P.shops[shop] || [], k = P.skus[sku] || [];
+        return passTier(shop) && (!fDm.value || sh[1] === fDm.value) && (!fAm.value || sh[2] === fAm.value) && (!fShop.value || shop === fShop.value) && (!fCat.value || k[1] === fCat.value)
+          && (!q2 || `${sku} ${k[0]} ${k[4]}`.toLowerCase().includes(q2)); });
+      const esc = (v) => { const x = String(v ?? ''); return /[",\n\r]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+      const lines = [['DM', 'AM', 'Shop code', 'Shop name', 'POS category', 'Sub cat 2', 'Sub cat 3', 'Brand', 'SKU', 'SKU name', 'Total POS GMV', 'QTY', 'Refund value'].join(',')];
+      out.forEach(([shop, sku, g, qty, rf]) => { const sh = P.shops[shop] || [], k = P.skus[sku] || [];
+        lines.push([sh[1], sh[2], shop, sh[0], k[1], k[2], k[3], k[4], sku, k[0], g, qty, rf].map(esc).join(',')); });
+      const scope = [fDm.value, fAm.value, fShop.value, fCat.value].filter(Boolean).join(' ') || 'All';
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+      a.download = `O2O POS offline by shop by SKU (Tableau) - ${scope.replace(/[\\/:*?"<>|]+/g, ' ')} (${String(P.period || '').replace(/\//g, '-')}).csv`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      $('off-tab-dl-note').insertAdjacentHTML('beforeend', `<p class="note">已下載 ${fmtN(out.length)} 行。</p>`);
+    };
     $('off-dl-note').innerHTML = '<ul class="note-list"><li>冇 Tableau 帳戶可以用呢個：PED sheet「Overall Summary」嘅 by shop by SKU，<b>包 manual discount 同 disposal</b></li><li>每日 13:00 更新；GMV 同 Tableau 有少少差距（唔同報表）</li><li>會跟上面嘅 DM / AM / 舖 / 類別篩選；用 Excel 直接開，中文正常</li></ul>';
     $('off-dl').onclick = async () => {
       if (!SKU) { $('off-dl').textContent = '載入緊……'; await loadSku(); $('off-dl').textContent = '下載 PED by shop by SKU CSV'; }

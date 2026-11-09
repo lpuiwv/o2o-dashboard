@@ -116,6 +116,7 @@
   .mix .row.sub { font-weight: 600; color: var(--muted); }
   .mix .row.sub .fill { background: var(--muted); }
   .mix .grp { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-top: 6px; }
+  .outlet-tag { display: inline-block; margin-left: 5px; padding: 0 6px; border-radius: 8px; font-size: 10px; line-height: 16px; font-weight: 600; background: #e07b00; color: #fff; vertical-align: 1px; }
   .wait { border: 1px dashed var(--line); border-radius: 10px; padding: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
   .wait p { margin: 0; }
   .lock { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -199,7 +200,8 @@
         <input id="search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops">
       </div>
       <div class="grid">
-        <div class="card"><h3>All shops</h3><span class="per" data-per="dop_both" hidden></span><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
+        <div class="card"><h3 id="shop-table-title">All shops</h3><span class="per" data-per="dop_act" id="shop-table-per" hidden></span><p class="note" id="shop-count"></p><div class="scroll"><table id="shop-table"></table></div></div>
+        <div class="card" id="shop-proj-card" hidden><h3>All shops — Projected（全月預計）</h3><span class="per" data-per="dop_proj" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖；全部欄都係<b>全月預計</b>（DOP MTD tab 嘅 Projected 欄）；同上面 Actual 表用同一個 AM 篩選同搜尋</li><li><b>DOP (Proj.) vs avg</b> = 該舖 Proj. DOP − 平均每間舖（最底 Avg 行）</li></ul><div class="scroll"><table id="shop-table-proj"></table></div></div>
       </div>
     </div>
   </section>
@@ -440,6 +442,7 @@
   let scope = 'ex';
   // Outlet shops and EPR, matching the sheet's 'Excl. Outlet & EPR' summary (SWH and CHE are outlets)
   const EXCLUDED = ['SWH', 'CHE', 'EPR'];
+  const OUTLETS = ['SWH', 'CHE'];  // outlet shops: orange "Outlet" tag after the shop name in every shop table (Vivian, 9/11/2026)
   const sortState = {};
   const TABS = ['dop', 'tm', 'pos', 'pickup', 'offline', 'discount', 'disposal', 'umss'];
 
@@ -541,6 +544,7 @@
     });
     thead.appendChild(hr);
     const tbody = document.createElement('tbody');
+    const tagCol = cols.find((c) => c.key === 'shop_name') || cols.find((c) => c.key === 'shop_code' || c.key === 'shop');
     data.push(...pinned);
     data.forEach((r) => {
       const tr = document.createElement('tr'); if (r._cls) tr.className = r._cls;
@@ -551,6 +555,7 @@
         if (c.freeze) td.classList.add('fz');
         if (c.sign && v != null) td.classList.add(v < 0 ? 'neg' : 'pos');
         if (c.tone) { const k = c.tone(v); if (k) td.classList.add(k); }
+        if (c === tagCol && !r._pin && OUTLETS.includes(r.shop_code ?? r.shop)) { const o = document.createElement('span'); o.className = 'outlet-tag'; o.textContent = 'Outlet'; td.appendChild(o); }
         if (c.flag && c.flag(r)) { td.classList.add('flag'); td.textContent += ' ⚠'; td.title = 'GP% 異常高，請檢查 source 數據'; }
         // No bar on Total / pinned rows: a total is many times the biggest shop and its bar would stretch the column (Vivian, 3/11/2026)
         if (c.bar && v != null && c.bar.max > 0 && !r._pin) {
@@ -914,12 +919,18 @@
     avgRow.pos_gp_pct = null;
     if (DATA.dop_src === 'dop_mtd') {
       ['proj_pos_gmv', 'proj_pos_gpa', 'proj_pickup_gpa', 'tm_plan', 'proj_disposal_cost', 'proj_other_mkt_cost'].forEach((c) => { avgRow[c] = rows.length ? d3.mean(rows, (r) => r[c] || 0) : null; });
+      // Actual and Projected in two tables (Vivian, 9/11/2026)
+      const key4 = () => [{ key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true }];
+      $('shop-table-title').textContent = 'All shops — Actual（月初至今）'; $('shop-table-per').dataset.per = 'dop_act'; $('shop-proj-card').hidden = false;
       drawTable($('shop-table'), rows.length ? rows.concat([avgRow]) : rows, [
-        { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true },
-        ...DOP_ACT, { key: 'tm_to_gp', label: 'TM / GP (Actual)', fmt: fmtP, get: ratio }, ...DOP_PROJ,
+        ...key4(), ...DOP_ACT, { key: 'tm_to_gp', label: 'TM / GP (Actual)', fmt: fmtP, get: ratio },
+        { key: 'vs_avg_act', label: 'DOP (Actual) vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.dop == null ? null : (r.dop || 0) - avgRow.dop },
+      ]);
+      drawTable($('shop-table-proj'), rows.length ? rows.concat([avgRow]) : rows, [
+        ...key4(), ...DOP_PROJ,
         { key: 'vs_avg', label: 'DOP (Proj.) vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
       ]);
-    } else drawTable($('shop-table'), rows.length ? rows.concat([avgRow]) : rows, [
+    } else { $('shop-proj-card').hidden = true; $('shop-table-title').textContent = 'All shops'; $('shop-table-per').dataset.per = 'dop_both'; } if (DATA.dop_src !== 'dop_mtd') drawTable($('shop-table'), rows.length ? rows.concat([avgRow]) : rows, [
       { key: 'shop_code', label: 'Shop', freeze: true }, tierCol('shop_code'), { key: 'shop_name', label: 'Name', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true },
       { key: 'pos_gpa', label: 'POS GPA', fmt: fmtN }, { key: 'pos_gp_pct', label: 'GP%', fmt: fmtP, flag: (r) => r.pos_gp_pct > GP_FLAG }, { key: 'pickup_gpa', label: 'Pickup GPA', fmt: fmtN },
       { key: 'tm_cost', label: 'TM cost', fmt: fmtN }, { key: 'disposal_cost', label: 'Disposal', fmt: fmtN }, { key: 'other_mkt_cost', label: 'Other & MKT', fmt: fmtN },
@@ -928,7 +939,7 @@
       { key: 'vs_avg', label: 'Proj. DOP vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
     ]);
     $('shop-count').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一間舖（顯示緊 ${rows.length} 間）；<b>(Actual)</b> = 月初至今實數，<b>(Proj.)</b> = 全月預計</li>
-      <li><b>TM / GP</b> = Frontline TM cost ÷（POS GPA + Pickup GPA）</li><li><b>DOP (Proj.) vs avg</b> = 該舖 Proj. DOP − 平均每間舖（最底 Avg 行）</li>
+      <li><b>TM / GP</b> = Frontline TM cost ÷（POS GPA + Pickup GPA）</li><li><b>${DATA.dop_src === 'dop_mtd' ? 'DOP (Actual) vs avg</b> = 該舖月初至今 DOP' : 'DOP (Proj.) vs avg</b> = 該舖 Proj. DOP'} − 平均每間舖（最底 Avg 行）</li>
       <li>「Excl. Outlet &amp; EPR」唔計 SWH、CHE 同 EPR；撳欄名可以排序</li></ul>`;
 
   }
@@ -1463,7 +1474,7 @@
     const hist = Object.keys(DATA.tm_hist || {}).sort(); const isoD = (x) => `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}`;
     const OT = DATA.offline_t || {};
     const PERI = {
-      dop_both: both(period(salesTo)), dop_proj: fullMonth ? `${fullMonth}（全月預計，用 ${period(salesTo)} 實數推算）` : '',
+      dop_both: both(period(salesTo)), dop_act: act(period(salesTo)), dop_proj: fullMonth ? `${fullMonth}（全月預計，用 ${period(salesTo)} 實數推算）` : '',
       tm_act: act(period(tmTo)), tm_proj: fullMonth ? `${fullMonth}（全月預計）` : '', tm_both: both(period(tmTo)),
       tm_hist: hist.length ? `每日記錄 ${isoD(hist[0])} – ${isoD(hist[hist.length - 1])}（每個數都係嗰日嘅全月預計）` : '',
       pos: P.period ? `${dash(P.period)}（GMV 月初至今；Target 同 Projected 係全月）` : '',

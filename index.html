@@ -311,12 +311,12 @@
       <p>未有 Manual discount 數據，資料來自 O2O POS Target (Tableau) Google Sheet 嘅「Manual Discount」tab。</p>
     </div>
     <div class="sec" id="md-body">
-      <p class="note"><b>包括全部類別（All category）</b>：Fruits、Grocery、Frozen、Chilled 等全部 POS 類別一齊計，唔係淨係生果。</p>
+      <p class="note" id="md-allcat"><b>包括全部類別（All category），但唔計 Outlet SKUs</b>：Fruits、Grocery、Frozen、Chilled 等 POS 類別一齊計；POS category =「Outlet SKUs」嘅貨品，Manual discount 同 GMV 都唔計。</p>
       <p class="note" id="md-note"></p>
       <div class="tiles" id="md-kpis"></div>
       <dl class="defs" id="md-defs-raw" hidden>
-        <dt>Manual discount</dt><dd>「Discount Raw」tab 入面 Promotion label = <b>MANUAL</b> 嘅 Discount Amount 加總（其他 label 唔計）</dd>
-        <dt>POS GMV</dt><dd>PED sheet「Overall Summary」嘅 Total POS GMV（全部類別）</dd>
+        <dt>Manual discount</dt><dd>「Discount Raw」tab 入面 Promotion label = <b>MANUAL</b> 嘅 Discount Amount 加總（其他 label 唔計；<b>唔計 Outlet SKUs</b>）</dd>
+        <dt>POS GMV</dt><dd>PED sheet「Overall Summary」嘅 Total POS GMV（全部類別，<b>唔計 Outlet SKUs</b>）</dd>
         <dt>MD rate</dt><dd>Manual discount ÷（POS GMV + Manual discount）；<b style="color: var(--bad)">紅色</b> = 高過整體 MD rate 1.5 倍</dd>
         <dt>Avg MD per shop</dt><dd>Manual discount ÷ 舖數</dd>
         <dt>MD lines</dt><dd>有 manual discount 嘅 POS 行數</dd>
@@ -1098,8 +1098,8 @@
     const T = sum(inTier);
     const noTeam = all.filter((r) => r.am === '—').map((r) => r.shop_code);
     $('md-defs-tab').hidden = RAW; $('md-defs-raw').hidden = !RAW; $('md-fruit-card').hidden = !RAW;
-    $('md-note').innerHTML = '<ul class="note-list">' + (RAW ? `<li><b>來源</b>：PED sheet「${escH(M.tab)}」，<b>只計 Promotion label = MANUAL</b>；${M.gmv_src === 'tableau' ? 'POS GMV 用 Tableau Manual Discount › Shop View 嘅 Store GMV（同一個月）' : 'POS GMV 來自同一份 sheet 嘅「Overall Summary」'}</li>` : '<li><b>來源</b>：Tableau（O2O Report › Manual Discount › Shop View）</li>') +
-      '<li>包括全部舖（連 outlet 同 EPR）</li>' + (noTeam.length ? `<li>${escH(noTeam.join('、'))} 喺 POS / DOP sheet 搵唔到 AM，AM / DM 表顯示「—」</li>` : '') + '</ul>';
+    $('md-note').innerHTML = '<ul class="note-list">' + (RAW ? `<li><b>來源</b>：PED sheet「${escH(M.tab)}」，<b>只計 Promotion label = MANUAL</b>；${M.gmv_src === 'tableau' ? 'POS GMV 用 Tableau Manual Discount › Shop View 嘅 Store GMV（同一個月），再減該舖 Outlet SKUs GMV（Tableau POS offline）' : 'POS GMV 來自同一份 sheet 嘅「Overall Summary」'}</li>` : '<li><b>來源</b>：Tableau（O2O Report › Manual Discount › Shop View）</li>') +
+      '<li>包括全部舖（連 outlet 同 EPR）</li>' + (M.excl_outlet ? `<li><b>唔計 Outlet SKUs</b>（POS category =「Outlet SKUs」）：MD 同 GMV 都剔除${M.outlet_md ? `；剔除咗 Outlet SKUs manual discount ${fmtN(M.outlet_md)}` : ''}</li>` : '') + (noTeam.length ? `<li>${escH(noTeam.join('、'))} 喺 POS / DOP sheet 搵唔到 AM，AM / DM 表顯示「—」</li>` : '') + '</ul>';
     if (RAW) tiles($('md-kpis'), [
       ['POS GMV', fmtK(T.gmv), { hint: '月初至今' }], ['Manual discount', fmtK(T.md), { hint: `${T.shops} 間舖` }],
       ['MD rate', fmtP(T.md_rate), { hint: 'MD ÷（GMV + MD）' }], ['Avg MD per shop', fmtK(T.md_per_shop)],

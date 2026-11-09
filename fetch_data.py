@@ -27,6 +27,22 @@ TIER_SHEET = "1YFEdwrN9E8LQlB63hWZU6kWg_99wUjmxP_kUsKmZQvg"  # Tier of shop (by 
 TARGET_SHEET = "1NjGFRTCmTU_0-9vvoIXFYVSVocJ4_0Fyhjbe-8qWNA8"  # O2O Shop Target 2026 Final_For PED OPS: "<Mon> TM cost target" (Vivian, 2/11/2026)
 POS_SHEET = "1AZBZXU_dbRvTdUaE-J0WVcM62ZFkMTMOhsARdSNiyec"  # O2O POS Target (Tableau) - copy of Tableau crosstabs
 PED_SHEET = "13N3VxU3CzrE8vs_rFSkEC41yAQj8ZdbhVOTZKrt4x9o"  # PED Disposal+Discount+GP (Disposal bot): 'Overall Summary' shop x SKU MTD (Vivian, 4/11/2026)
+# Past months in the dashboard's month menu (Vivian, 9/11/2026): each is built into site/data_YYYYMM.enc.json. Their Tableau
+# data is a one-off copy in the POS sheet tabs "<tab> (Mon YYYY)" + "Info (Mon YYYY)" (Oct 2026: written 9/11/2026, POS / Pickup
+# target from Vivian's 'Target_Shop Version' sheet because Tableau returns the current month's target for any date range).
+# The PED sheet's 'Overall Summary' / 'By Shop' only hold the current month, so past months have no Disposal / Fruit / UM data.
+PAST_MONTHS = ["2026-10"]
+POS_SFX = ""  # "" = current-month POS sheet tabs; e.g. " (Oct 2026)" while a past month is built
+
+
+def pos_tab(name):
+    return f"'{name}{POS_SFX}'"
+
+
+def info_rows(get):
+    return get(POS_SHEET, f"{pos_tab('Info')}!A1:B40")
+
+
 ITERATIONS = 250_000
 ROOT = Path(__file__).resolve().parent
 HKT = ZoneInfo("Asia/Hong_Kong")
@@ -332,11 +348,11 @@ def parse_pos(values, cols, text_cols, total_label="Grand Total"):
 def fetch_pos(get):
     """POS GMV vs target, copied from Tableau into the POS sheet (optional)."""
     try:
-        raw = get(POS_SHEET, "'POS by shop'!A1:M200")
+        raw = get(POS_SHEET, f"{pos_tab('POS by shop')}!A1:M200")
         layout = "nov" if raw and any("frozen" in str(h).lower() for h in raw[0]) else "old"
         shops, total = parse_pos(raw, POS_SHOP_COLS_NOV if layout == "nov" else POS_SHOP_COLS, {"dm", "am", "shop_code", "shop_name"})
-        am, am_total = parse_pos(get(POS_SHEET, "'AM achievement'!A1:E30"), POS_AM_COLS, {"am"})
-        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B10") if r}
+        am, am_total = parse_pos(get(POS_SHEET, f"{pos_tab('AM achievement')}!A1:E30"), POS_AM_COLS, {"am"})
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in info_rows(get) if r}
         return {"shops": shops, "total": total or am_total, "am": am, "layout": layout, "period": info.get("Period", ""), "exported_at": info.get("Exported at", ""), "tableau_updated": info.get("Tableau last update", "")}
     except Exception as e:
         print(f"POS target sheet not read: {e}", file=sys.stderr)
@@ -355,12 +371,12 @@ def fetch_disposal(get):
     """Disposal by shop and by POS type, copied from Tableau ('Shop View (Disposal)' / 'Disposal') into the POS sheet
     by the daily scheduled task (Vivian, 2/11/2026). Optional."""
     try:
-        shops, _ = parse_pos(get(POS_SHEET, "'Disposal'!A1:N200"), DISP_COLS, {"shop_code", "shop_name"})
+        shops, _ = parse_pos(get(POS_SHEET, f"{pos_tab('Disposal')}!A1:N200"), DISP_COLS, {"shop_code", "shop_name"})
         try:
-            types, _ = parse_pos(get(POS_SHEET, "'Disposal by type'!A1:I40"), DISP_TYPE_COLS, {"pos_type"})
+            types, _ = parse_pos(get(POS_SHEET, f"{pos_tab('Disposal by type')}!A1:I40"), DISP_TYPE_COLS, {"pos_type"})
         except Exception:
             types = []
-        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B16") if r}
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in info_rows(get) if r}
         shops = [x for x in shops if x.get("shop_code") and x["shop_code"] != "All"]
         if not shops:
             return None
@@ -380,11 +396,11 @@ def fetch_pickup(get):
     """Shop pick-up GMV vs target, copied from Tableau "Shop Pick-up" into the POS sheet's 'Pickup by shop' tab by the
     daily scheduled task (Vivian, 4/11/2026). Optional."""
     try:
-        rows, _ = parse_pos(get(POS_SHEET, "'Pickup by shop'!A1:L200"), PICKUP_COLS, {"dm", "am", "shop_code", "shop_name"})
+        rows, _ = parse_pos(get(POS_SHEET, f"{pos_tab('Pickup by shop')}!A1:L200"), PICKUP_COLS, {"dm", "am", "shop_code", "shop_name"})
         rows = [r for r in rows if r.get("shop_code") and r["shop_code"] != "All"]
         if not rows:
             return None
-        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B24") if r}
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in info_rows(get) if r}
         return {"shops": rows, "period": info.get("Pickup period", ""), "exported_at": info.get("Pickup exported at", "")}
     except Exception as e:
         print(f"Pickup tab not read: {e}", file=sys.stderr)
@@ -396,9 +412,9 @@ def fetch_offline_tab(get):
     view into the POS sheet's 'POS offline by shop' (shop x pos_category_type) and 'POS offline by SKU' (SKU, all shops) tabs.
     The full shop x SKU list (~10k rows) stays in Tableau: the dashboard links to its CSV export. Optional."""
     try:
-        sh = get(POS_SHEET, "'POS offline by shop'!A1:H1000")
-        sk = get(POS_SHEET, "'POS offline by SKU'!A1:I1500")
-        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B24") if r}
+        sh = get(POS_SHEET, f"{pos_tab('POS offline by shop')}!A1:H1000")
+        sk = get(POS_SHEET, f"{pos_tab('POS offline by SKU')}!A1:I1500")
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in info_rows(get) if r}
     except Exception as e:
         print(f"POS offline tabs not read: {e}", file=sys.stderr)
         return None
@@ -533,12 +549,12 @@ def fetch_redemption(get):
     """Redemption (with x1.2 & x1.5) by SKU per shop, copied from Tableau into the POS sheet's 'Redemption by SKU' tab
     by the daily scheduled task (Vivian, 3/11/2026). Optional."""
     try:
-        rows, _ = parse_pos(get(POS_SHEET, "'Redemption by SKU'!A1:K6000"), RED_COLS,
+        rows, _ = parse_pos(get(POS_SHEET, f"{pos_tab('Redemption by SKU')}!A1:K6000"), RED_COLS,
                             {"dm", "am", "shop_code", "sku_id", "sku_name", "start", "end"})
         rows = [r for r in rows if r.get("sku_id") and r.get("shop_code") and "All" not in (r["sku_id"], r["shop_code"], r["am"])]
         if not rows:
             return None
-        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B20") if r}
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in info_rows(get) if r}
         return {"rows": rows, "period": info.get("Redemption period", ""), "exported_at": info.get("Redemption exported at", "")}
     except Exception as e:
         print(f"Redemption tab not read: {e}", file=sys.stderr)
@@ -548,8 +564,8 @@ def fetch_redemption(get):
 def fetch_md(get):
     """Manual Discount by shop, copied from Tableau into the POS sheet's 'Manual Discount' tab (optional)."""
     try:
-        shops, _ = parse_pos(get(POS_SHEET, "'Manual Discount'!A1:H200"), MD_COLS, {"shop_code", "shop_name"})
-        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in get(POS_SHEET, "'Info'!A1:B12") if r}
+        shops, _ = parse_pos(get(POS_SHEET, f"{pos_tab('Manual Discount')}!A1:H200"), MD_COLS, {"shop_code", "shop_name"})
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in info_rows(get) if r}
         return {"shops": [s for s in shops if s.get("shop_code")], "period": info.get("MD period", ""),
                 "exported_at": info.get("MD exported at", ""), "tableau_updated": info.get("MD Tableau last update", "")}
     except Exception as e:
@@ -987,14 +1003,18 @@ def fetch_budget(get, d):
     return None
 
 
-def fetch_all():
-    get = make_getter()
+def fetch_all(get=None, past=None):
+    """past = last day of a past month (PAST_MONTHS) -> that month's dashboard; None -> the current month."""
+    get = get or make_getter()
     today = dt.datetime.now(HKT).date()
-    try:
-        raw = fetch_month(get, today)
-    except Exception as e:  # new month's tabs not created yet -> use last month
-        print(f"This month's tabs not ready ({e}); falling back to last month", file=sys.stderr)
-        raw = fetch_month(get, today.replace(day=1) - dt.timedelta(days=1))
+    if past:
+        raw = fetch_month(get, past)
+    else:
+        try:
+            raw = fetch_month(get, today)
+        except Exception as e:  # new month's tabs not created yet -> use last month
+            print(f"This month's tabs not ready ({e}); falling back to last month", file=sys.stderr)
+            raw = fetch_month(get, today.replace(day=1) - dt.timedelta(days=1))
     dm, as_of, dates = parse_team(raw["dm"], "dm")
     am, _, _ = parse_team(raw["am"], "am")
     dm_ex, _, _ = parse_team(raw["dm_ex"], "dm")
@@ -1026,8 +1046,18 @@ def fetch_all():
                 r[blk]["total"] -= r[blk]["mgmt"]
                 r[blk]["mgmt"] = 0
             r["total_cost"], r["roster_total_cost"] = r["act"]["total"], r["proj"]["total"]
-    ped, sku = fetch_ped(get)
-    md = fetch_md_raw(get, raw["_date"], ped) or fetch_md(get)
+    if past:
+        # PED 'Overall Summary' / 'By Shop' only hold the current month: no Disposal / Fruit / UM data for a past month.
+        # Manual discount = PED 'Discount Raw - <Mon YYYY>' (MANUAL lines); GMV for the MD rate = Tableau Store GMV of that month.
+        ped, sku = None, None
+        md_t = fetch_md(get)
+        md = fetch_md_raw(get, raw["_date"], {"gmv": {s["shop_code"]: s.get("gmv") for s in (md_t or {}).get("shops", [])}}) or md_t
+        if md and md.get("source") == "raw":
+            md["gmv_src"] = "tableau"
+            md["period"] = (md_t or {}).get("period") or md["period"]
+    else:
+        ped, sku = fetch_ped(get)
+        md = fetch_md_raw(get, raw["_date"], ped) or fetch_md(get)
     return {
         "month": raw["_month"],
         "as_of": as_of,
@@ -1036,7 +1066,7 @@ def fetch_all():
         "dm_ex": dm_ex, "am_ex": am_ex,
         "pos": fetch_pos(get),
         "md": md,
-        "disposal": fetch_disposal(get),
+        "disposal": None if past else fetch_disposal(get),
         "redemption": fetch_redemption(get),
         "pickup": fetch_pickup(get),
         "offline_t": fetch_offline_tab(get),
@@ -1052,7 +1082,7 @@ def fetch_all():
         "tm_target": tm_vs_target(parse_tm_target(raw.get("tm_target") or []), raw.get("raw") or [], tm, raw["_date"],
                                   parse_shop_gpa_target(raw.get("gpa_target") or []), tm_actual_day(raw)),
         "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio, "tm_excl_dmam": excl_dmam,
-        "_tm_month": f"{raw['_date']:%Y%m}",
+        "_tm_month": f"{raw['_date']:%Y%m}", "month_key": f"{raw['_date']:%Y%m}", "past": bool(past),
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }
@@ -1090,7 +1120,7 @@ def snapshot(tm):
     return {"total": round(sum(v["t"] for v in shops.values()), 2), "shops": shops}
 
 
-def update_history(data, password):
+def update_history(data, password, save=True):
     hist = {}
     if HISTORY.exists():
         try:
@@ -1098,6 +1128,9 @@ def update_history(data, password):
         except Exception as e:  # password changed or file damaged -> start again
             print(f"TM history not readable ({e}); starting a new one", file=sys.stderr)
     month, today = data.pop("_tm_month"), dt.datetime.now(HKT).strftime("%Y-%m-%d")
+    if not save:  # past month: show its saved snapshots, change nothing
+        data["tm_hist"] = dict(sorted(hist.get(month, {}).items()))
+        return
     hist.setdefault(month, {})[today] = snapshot(data["tm"])
     keep = sorted({d for m in hist.values() for d in m})[-HISTORY_DAYS:]
     hist = {m: {d: v for d, v in days.items() if d in keep} for m, days in hist.items()}
@@ -1111,11 +1144,33 @@ def main():
     password = os.environ.get("DASH_PASSWORD", "")
     if len(password) < 10:
         raise SystemExit("DASH_PASSWORD secret missing or shorter than 10 characters")
-    data = fetch_all()
+    global POS_SFX
+    get = make_getter()
+    data = fetch_all(get)
     sku = data.pop("_sku", None)
     update_history(data, password)
     site = ROOT / "site"
     site.mkdir(exist_ok=True)
+    # Month menu (Vivian, 9/11/2026): one encrypted file per past month; a failing past month never stops the current build
+    months = [{"key": "current", "label": data["month"]}]
+    for ym in PAST_MONTHS:
+        y, m = map(int, ym.split("-"))
+        last = dt.date(y, m, calendar.monthrange(y, m)[1])
+        if f"{last:%Y%m}" == data["month_key"]:
+            continue
+        POS_SFX = f" ({last:%b %Y})"
+        try:
+            pdata = fetch_all(get, past=last)
+            pdata.pop("_sku", None)
+            update_history(pdata, password, save=False)
+            (site / f"data_{last:%Y%m}.enc.json").write_text(json.dumps(encrypt(pdata, password)), encoding="utf-8")
+            months.append({"key": f"{last:%Y%m}", "label": pdata["month"]})
+            print(f"OK past month: {pdata['month']}, {len(pdata['shops'])} shops")
+        except (Exception, SystemExit) as e:
+            print(f"Past month {ym} not built: {e!r}", file=sys.stderr)
+        finally:
+            POS_SFX = ""
+    data["months"] = months
     if sku:  # POS offline shop x SKU rows: own encrypted file, loaded only when that tab opens
         (site / "sku.enc.json").write_text(json.dumps(encrypt(sku, password)), encoding="utf-8")
     (site / "data.enc.json").write_text(json.dumps(encrypt(data, password)), encoding="utf-8")

@@ -34,6 +34,7 @@
   .defs dt { font-weight: 600; color: var(--fg); margin: 0; }
   .defs dd { color: var(--muted); margin: 0; }
   table.um-defs { font-size: 12px; margin-top: 10px; }
+  h4.um-sub { margin: 14px 0 6px; font-size: 14px; }
   table.um-defs th, table.um-defs td { text-align: left; vertical-align: top; padding: 5px 10px 5px 0; white-space: normal; }
   table.um-defs td:first-child { font-weight: 600; white-space: nowrap; }
   table.um-defs td { color: var(--muted); }
@@ -406,7 +407,13 @@
         <h3 id="um-title">UM / SS KPI</h3>
         <span class="per" data-per="umss" hidden></span>
         <p class="note" id="um-note"></p>
-        <div class="scroll"><table id="um-table"></table></div>
+        <h4 class="um-sub">UM（包括 AUM）</h4>
+        <div class="scroll"><table id="um-table-um"></table></div>
+        <h4 class="um-sub">SS</h4>
+        <div class="scroll"><table id="um-table-ss"></table></div>
+        <h4 class="um-sub">ASS</h4>
+        <div class="scroll"><table id="um-table-ass"></table></div>
+        <div id="um-other-wrap" hidden><h4 class="um-sub">未分類（名冇 (UM) / (SS) / (ASS)）</h4><div class="scroll"><table id="um-table-other"></table></div></div>
         <div class="scroll"><table class="um-defs" id="um-defs"></table></div>
       </div>
     </div>
@@ -1569,13 +1576,20 @@
       if (!document.getElementById('tier-filter').value && SP.um && SP.um[um] != null) o.tm_t = SP.um[um];  // UM target % from the target tab's pivot (I:L)
       return o;
     }).sort((a, b) => String(a.dm).localeCompare(String(b.dm)) || String(a.am).localeCompare(String(b.am)) || String(a.um).localeCompare(String(b.um)));
-    const tot = { um: 'Total', am: '', _pin: true, _cls: 'tot', ...agg(inScope) };
-    const SPk = umAm.value ? ['am', umAm.value] : umDm.value ? ['dm', umDm.value] : ['total'];
-    if (!document.getElementById('tier-filter').value && SP[SPk[0]] != null) { const v = SPk[0] === 'total' ? SP.total : SP[SPk[0]][SPk[1]]; if (v != null) tot.tm_t = v; }
+    // Split by role from the name suffix in the TM target tab: (UM)/(AUM) → UM, (SS) → SS, (ASS) → ASS; *Vacancy dropped (Vivian, 9/11/2026)
+    const baseRole = new Map();
+    const roleOf = (n) => { const m = String(n || '').match(/\((A?UM|SS|ASS)\)/i); return m ? (/UM/i.test(m[1]) ? 'um' : m[1].toUpperCase() === 'ASS' ? 'ass' : 'ss') : null; };
+    const baseOf = (n) => String(n || '').replace(/\(.*?\)/g, '').trim().toLowerCase();
+    rows.forEach((r) => { const k = roleOf(r.um); if (k) baseRole.set(baseOf(r.um), k); });
+    const isVac = (n) => /vacan/i.test(String(n || ''));
+    const grp = { um: [], ss: [], ass: [], other: [] };
+    rows.forEach((r) => { if (isVac(r.um)) return; grp[roleOf(r.um) || baseRole.get(baseOf(r.um)) || 'other'].push(r); });
+    const umCodes = new Map(); inScope.forEach((c) => { const u = team.get(c).um; (umCodes.get(u) || umCodes.set(u, []).get(u)).push(c); });
+    const totOf = (list) => ({ um: 'Total', am: '', _pin: true, _cls: 'tot', ...agg(list.flatMap((r) => umCodes.get(r.um) || [])) });
     const tmTone = (r) => r.tm_p == null || r.tm_t == null ? '' : (r.tm_p > r.tm_t ? 'neg' : 'pos');
     const scope = umAm.value || umDm.value || 'All';
     $('um-title').textContent = `UM / SS KPI — ${scope}（${DATA.month || ''}）`;
-    $('um-note').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一個 UM / SS，計佢負責嘅舖（跟「${escH((DATA.month || '').split(' ')[0].slice(0, 3))} TM cost target」tab）</li><li><b>Total</b> = 上面全部 UM / SS 加埋，% 用加埋先除</li><li>每個 KPI 嘅計法、來源同期間見表下面；Dashboard 更新：${escH(DATA.generated_at)}</li></ul>`;
+    $('um-note').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一個 UM / SS，計佢負責嘅舖（跟「${escH((DATA.month || '').split(' ')[0].slice(0, 3))} TM cost target」tab）</li><li>分三個表：<b>UM</b>（包括 AUM）、<b>SS</b>、<b>ASS</b>（跟 TM target tab 名後面嘅 (UM) / (AUM) / (SS) / (ASS)）；Vacancy 唔顯示</li><li><b>Total</b> = 該表全部人負責嘅舖加埋，% 用加埋先除</li><li>每個 KPI 嘅計法、來源同期間見表下面；Dashboard 更新：${escH(DATA.generated_at)}</li></ul>`;
     const G = '<b style="color: var(--good)">綠色</b>', R = '<b style="color: var(--bad)">紅色</b>';
     const esc = (x) => String(x || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const defs = [
@@ -1590,7 +1604,7 @@
     ];
     $('um-defs').innerHTML = `<thead><tr>${defs[0].map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${defs.slice(1).map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`
       + `<tfoot><tr><td colspan="4" style="font-weight: 400; color: var(--muted); white-space: normal">冇 target 嘅舖唔計入達標 % 同 target。揀咗 Shop tier 時，TM target % 改用該批舖嘅 target 加埋計。</td></tr></tfoot>`;
-    drawTable($('um-table'), rows.concat(rows.length ? [tot] : []), [
+    const cols = [
       { key: 'um', label: 'UM / SS', cls: 'l', freeze: true }, { key: 'am', label: 'AM', cls: 'l', freeze: true }, { key: 'shops', label: 'Shops', fmt: fmtN },
       { key: 'disp_rate', label: 'Disposal rate', fmt: fmtP, tone: (v) => { const t = ((((PED.disp || {}).targets || {}).Overall) || {}).overall; return v == null || t == null ? '' : (v > t ? 'neg' : 'pos'); } },
       { key: 'fruit_disc', label: 'Fruit discount', fmt: fmtN }, { key: 'fruit_rate', label: 'Fruit disc. %', fmt: fmtP },
@@ -1598,11 +1612,17 @@
       { key: 'tm_t', label: 'TM target %', fmt: fmtP },
       { key: 'pos_gmv', label: 'POS GMV (MTD)', fmt: fmtN }, { key: 'pos_target', label: 'POS target', fmt: fmtN }, { key: 'pos_ach', label: 'POS proj. ach.', fmt: fmtP, tone: achCls },
       { key: 'pu_gmv', label: 'Pickup GMV (MTD)', fmt: fmtN }, { key: 'pu_target', label: 'Pickup target', fmt: fmtN }, { key: 'pu_ach', label: 'Pickup proj. ach.', fmt: fmtP, tone: achCls },
-    ]);
-    // colour TM % (Proj.) against each row's own target (tone() only sees the value)
-    const ci = [...$('um-table').querySelectorAll('thead th')].findIndex((th) => th.textContent.startsWith('TM % (Proj.)'));
-    const shown = $('um-table')._export.rows;
-    $('um-table').querySelectorAll('tbody tr').forEach((tr, i) => { const k = tmTone(shown[i]); if (k && tr.children[ci]) tr.children[ci].classList.add(k); });
+    ];
+    const drawRole = (id, list, lab) => {
+      const t = $(id); const c2 = cols.map((c) => c.key === 'um' ? { ...c, label: lab } : c);
+      drawTable(t, list.concat(list.length ? [totOf(list)] : []), c2);
+      // colour TM % (Proj.) against each row's own target (tone() only sees the value)
+      const ci = [...t.querySelectorAll('thead th')].findIndex((th) => th.textContent.startsWith('TM % (Proj.)'));
+      const shown = t._export.rows;
+      t.querySelectorAll('tbody tr').forEach((tr, i) => { const k = tmTone(shown[i] || {}); if (k && tr.children[ci]) tr.children[ci].classList.add(k); });
+    };
+    drawRole('um-table-um', grp.um, 'UM / AUM'); drawRole('um-table-ss', grp.ss, 'SS'); drawRole('um-table-ass', grp.ass, 'ASS');
+    $('um-other-wrap').hidden = !grp.other.length; if (grp.other.length) drawRole('um-table-other', grp.other, 'UM / SS');
   }
 
   // ---------- POS offline: shop x SKU sales (PED 'Overall Summary'), loaded on demand (Vivian, 4/11/2026) ----------

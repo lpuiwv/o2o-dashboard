@@ -225,10 +225,11 @@
           <dt>Target TM cost</dt><dd>全月 TM cost target</dd>
           <dt>DEF</dt><dd>Target TM cost − Projected TM cost</dd>
           <dt>GPA</dt><dd>POS GPA + Pickup GPA（Pickup GPA = pickup GMV × 6.9%）<span class="tt-gpa"></span></dd>
-          <dt>Actual % / Projected %</dt><dd>TM cost ÷ GPA；Projected 用全月預計 TM cost ÷ 預計 GPA（月初至今 GPA ÷ 已有日數 × 全月日數）</dd>
+          <dt>Actual % / Projected %</dt><dd>TM cost ÷ GPA；Projected 用全月預計 TM cost ÷ 預計全月 GPA（預計 GPA 有計平日 / 週末，見下面「Projected GPA 點計」）</dd>
           <dt>Target %</dt><dd>TM cost ÷ GPA 嘅目標；每間舖用 target tab F 欄，DM / AM / Total 用 I–L 欄</dd>
           <dt>Projected vs target</dt><dd>Projected % − Target %（pp；正數 = 預計 TM cost 佔 GPA 高過目標，紅色）</dd>
         </dl>
+        <div class="note" id="tt-projhow"></div>
         <details class="src"><summary>資料來源同合計計法</summary>
           <ul>
             <li>TM cost、Projected、Target TM cost：TM cost sheet「<span class="tt-tab"></span>」（Target 欄 =「<span class="tt-mon"></span> TM Cost (excl. DMAM)」）</li>
@@ -289,7 +290,7 @@
       <p class="note" id="pos-note"></p>
       <div class="tiles" id="pos-kpis"></div>
       <div class="grid">
-        <div class="card"><h3>DM target achievement</h3><span class="per" data-per="pos" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下有 target 嘅舖加埋</li><li><b>Current ach.</b> = Σ POS GMV（月初至今）÷ Σ 全月 target</li><li><b>Projected ach.</b> = 按月初至今推算嘅全月 GMV ÷ Σ target</li><li><span class="pos-ex"></span></li></ul><div class="scroll"><table id="pos-dm-table"></table></div></div>
+        <div class="card"><h3>DM target achievement</h3><span class="per" data-per="pos" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下有 target 嘅舖加埋</li><li><b>Current ach.</b> = Σ POS GMV（月初至今）÷ Σ 全月 target</li><li><b>Projected ach.</b> = Σ 預計全月 GMV ÷ Σ target（預計有計平日 / 週末，計法見上面）</li><li><span class="pos-ex"></span></li></ul><div class="scroll"><table id="pos-dm-table"></table></div></div>
         <div class="card"><h3>AM target achievement</h3><span class="per" data-per="pos" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 AM 旗下有 target 嘅舖加埋（計法同 DM 表一樣）</li><li>冇 target 嘅舖唔計，所以個別 AM 會同 Tableau 有少少唔同</li><li><span class="pos-ex"></span></li></ul><div class="scroll"><table id="pos-am-table"></table></div></div>
         <div class="card"><h3>POS (pospay Delivery and POS) by shop</h3><span class="per" data-per="pos" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖；GMV 係月初至今，Target 係全月</li><li><span class="pos-formula">Takeaway GMV 包 MKT fund 同 RM discount。</span></li><li><span class="pos-notarget"></span></li></ul>
           <div class="ctrl"><select id="pos-am-filter" aria-label="Filter by AM"></select><input id="pos-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
@@ -387,10 +388,10 @@
         <dt>Pick-up Target</dt><dd>全月 pickup GMV target</dd>
         <dt>Total Pick-up GMV</dt><dd>Non senior + Senior (webcart) + Senior (non-webcart)，月初至今</dd>
         <dt>Current ach.</dt><dd>Total Pick-up GMV ÷ Target</dd>
-        <dt>Projected</dt><dd>按月初至今推算全月；Projected ach. = Projected GMV ÷ Target，<b style="color: var(--good)">綠色</b> = 預計達標，<b style="color: var(--bad)">紅色</b> = 低過 80%</dd>
+        <dt>Projected</dt><dd>預計全月 GMV（有計平日 / 週末，計法見上面）；Projected ach. = Projected GMV ÷ Target，<b style="color: var(--good)">綠色</b> = 預計達標，<b style="color: var(--bad)">紅色</b> = 低過 80%</dd>
       </dl>
       <div class="grid">
-        <div class="card"><h3>DM target achievement</h3><span class="per" data-per="pickup" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下有 target 嘅舖加埋</li><li><b>Current ach.</b> = Σ Pick-up GMV（月初至今）÷ Σ 全月 target；<b>Projected ach.</b> = 推算全月 ÷ target</li></ul><div class="scroll"><table id="pu-dm-table"></table></div></div>
+        <div class="card"><h3>DM target achievement</h3><span class="per" data-per="pickup" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 DM 旗下有 target 嘅舖加埋</li><li><b>Current ach.</b> = Σ Pick-up GMV（月初至今）÷ Σ 全月 target；<b>Projected ach.</b> = 預計全月 ÷ target</li></ul><div class="scroll"><table id="pu-dm-table"></table></div></div>
         <div class="card"><h3>Pickup by AM</h3><span class="per" data-per="pickup" hidden></span><ul class="note-list"><li><b>每行</b> = 一個 AM 旗下有 target 嘅舖加埋；計法同 DM 表</li></ul><div class="scroll"><table id="pu-am-table"></table></div></div>
         <div class="card"><h3>Pickup by shop</h3><span class="per" data-per="pickup" hidden></span><ul class="note-list"><li><b>每行</b> = 一間舖；GMV 係月初至今，Target 係全月</li><li>可以揀 AM 或者搜尋舖號、舖名；撳欄名可以排序</li></ul>
           <div class="ctrl"><select id="pu-am-filter" aria-label="Filter by AM"></select><input id="pu-search" type="search" placeholder="搜尋舖號或舖名" aria-label="Search shops"></div>
@@ -449,7 +450,8 @@
   let scope = 'ex';
   // Outlet shops and EPR, matching the sheet's 'Excl. Outlet & EPR' summary (SWH and CHE are outlets)
   const EXCLUDED = ['SWH', 'CHE', 'EPR'];
-  const OUTLETS = ['SWH', 'CHE'];  // outlet shops: orange "Outlet" tag after the shop name in every shop table (Vivian, 9/11/2026)
+  const OUTLETS = ['SWH', 'CHE', 'KRS'];  // outlet shops: orange "Outlet" tag after the shop name in every shop table (Vivian, 9/11/2026; KRS 健威店 takes Outlet stock from Mon 9/11/2026)
+  const OUTLET_NOTE = { KRS: '健威店由 9/11/2026（星期一）起接收 Outlet 貨' };
   const sortState = {};
   const TABS = ['dop', 'tm', 'pos', 'pickup', 'offline', 'discount', 'disposal', 'umss'];
 
@@ -522,6 +524,31 @@
 
   const fmtK = (v) => v == null ? '—' : (Math.abs(v) >= 10000 ? new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 }).format(v) : d3.format(',.0f')(v));
   const fmtN = (v) => v == null ? '' : d3.format(',.0f')(v);
+  // How "Projected" (全月預計) is worked out, in plain words for any reader (Vivian, 9/11/2026: weekday/weekend weights)
+  function projHow(kind) {
+    const W = DATA.proj_weights, B = kind === 'tm' ? DATA.tm_target : DATA[kind === 'pos' ? 'pos' : 'pickup'];
+    const what = { pos: 'POS GMV', pickup: 'Pick-up GMV', tm: 'GPA（POS GPA + Pickup GPA）' }[kind];
+    if (!B || B.proj_method !== 'weights' || !W) {
+      return `<li><b>全月預計點計</b>：月初至今嘅 ${what} ÷ 已過日數 × 全月日數（平均每日 × 全月日數）。今個月未有平日 / 週末權重數據，所以暫時用呢個簡單計法。</li>`;
+    }
+    const win = ((W.meta || []).find((m) => /^Window/i.test(m)) || '').match(/(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/);
+    const winTxt = win ? `${win[1]} 至 ${win[2]}` : '上個月';
+    const n = B.proj_days;
+    const dimOf = (p) => { const m = String(p || '').match(/(\d{1,2})\/(\d{4})\s*$/); return m ? new Date(+m[2], +m[1], 0).getDate() : 30; };
+    let ex = '';
+    if (kind === 'tm') {
+      const s = (B.shops || []).find((r) => r.pf_pos && r.pf_pk);
+      if (s) ex = `<li><b>例子</b>：${escH(s.shop_code)} 嘅預計全月 GPA = 月初至今 POS GPA × ${s.pf_pos.toFixed(2)} + 月初至今 Pickup GPA × ${s.pf_pk.toFixed(2)}（兩個倍數分別用 POS GPA 同 Pickup 嘅權重計）。</li>`;
+    } else {
+      const k = kind === 'pos' ? 'pos_gmv' : 'pickup_gmv';
+      const s = (B.shops || []).find((r) => r.proj_factor && r[k]);
+      if (s) ex = `<li><b>例子</b>：${escH(s.shop_code)} 月初至今 ${what} ${fmtN(s[k])} × 倍數 ${s.proj_factor.toFixed(2)} = 預計全月 ${fmtN(s.proj_gmv)}（如果用平均每日直線推算就係 ${fmtN(n ? s[k] / n * dimOf(B.period) : null)}）。</li>`;
+    }
+    return `<li><b>全月預計點計（有計平日 / 週末）</b>：因為週末同平日生意唔同，唔係簡單用「平均每日 × 全月日數」。每間舖用佢自己 ${winTxt} 嘅每日實數，計出星期一至日每日嘅「權重」（例如星期六 1.8 即係嗰日生意大約係平均日嘅 1.8 倍）。</li>`
+      + `<li><b>公式</b>：預計全月 ${what} = 月初至今實數 × 倍數；倍數 = 全月每一日嘅權重加埋 ÷ 已過 ${n || ''} 日嘅權重加埋。即係話：如果尚餘日子多週末，倍數會大啲；多平日就細啲。</li>`
+      + ex
+      + `<li><b>來源</b>：DOP bot Google Sheet「Daily Shop PNL」嘅「Projection weights」tab（每個月重新計一次；冇計公眾假期；個別舖數據唔夠就用全部舖平均嘅權重）。DOP tab 嘅 Proj. DOP 都係用同一套權重。</li>`;
+  }
   const fmtP = (v) => v == null ? '' : d3.format('.1%')(v);
   const fmtH = (v) => v == null ? '' : d3.format(',.1f')(v);
   const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -562,7 +589,7 @@
         if (c.freeze) td.classList.add('fz');
         if (c.sign && v != null) td.classList.add(v < 0 ? 'neg' : 'pos');
         if (c.tone) { const k = c.tone(v); if (k) td.classList.add(k); }
-        if (c === tagCol && !r._pin && OUTLETS.includes(r.shop_code ?? r.shop)) { const o = document.createElement('span'); o.className = 'outlet-tag'; o.textContent = 'Outlet'; td.appendChild(o); }
+        if (c === tagCol && !r._pin && OUTLETS.includes(r.shop_code ?? r.shop)) { const o = document.createElement('span'); o.className = 'outlet-tag'; o.textContent = 'Outlet'; if (OUTLET_NOTE[r.shop_code ?? r.shop]) o.title = OUTLET_NOTE[r.shop_code ?? r.shop]; td.appendChild(o); }
         if (c.flag && c.flag(r)) { td.classList.add('flag'); td.textContent += ' ⚠'; td.title = 'GP% 異常高，請檢查 source 數據'; }
         // No bar on Total / pinned rows: a total is many times the biggest shop and its bar would stretch the column (Vivian, 3/11/2026)
         if (c.bar && v != null && c.bar.max > 0 && !r._pin) {
@@ -994,7 +1021,7 @@
     const exTxt = noTarget.length ? `唔計 ${noTarget.join('、')}（冇 target）` : '';
     document.querySelectorAll('.pos-notarget').forEach((el) => { el.textContent = noTarget.length ? `今個月冇 target 嘅舖（${noTarget.join('、')}）只列出參考，唔計入任何合計。` : '今個月全部舖都有 target，全部計入合計。'; });
     document.querySelectorAll('.pos-ex').forEach((el) => { el.textContent = noTarget.length ? ` 達標 % 已剔除 ${noTarget.join('、')}（今個月冇 target）。` : ''; });
-    $('pos-note').innerHTML = '<ul class="note-list"><li><b>來源</b>：Tableau（O2O Report › Shop Monthly Target）</li>' + (noTarget.length ? `<li>${escH(noTarget.join('、'))} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）</li>` : '') + '</ul>';
+    $('pos-note').innerHTML = '<ul class="note-list"><li><b>來源</b>：Tableau（O2O Report › Shop Monthly Target）；Projected GMV / Projected ach. 由 dashboard 自己計（見下面），所以會同 Tableau 個 Projected 有少少唔同</li>' + (noTarget.length ? `<li>${escH(noTarget.join('、'))} 今個月冇 target，唔計入任何 POS 合計同達標 %（Tableau 自己嘅合計有計）</li>` : '') + projHow('pos') + '</ul>';
     tiles($('pos-kpis'), [
       ['POS GMV target', fmtK(t.target), { hint: '全月' }], ['Total POS GMV', fmtK(t.pos_gmv), { hint: '月初至今' + (exTxt ? `，${exTxt}` : '') }],
       ['Current achievement', fmtP(t.current_ach), { hint: exTxt }], ['Projected POS GMV', fmtK(t.proj_gmv)],
@@ -1389,6 +1416,7 @@
     const iso = (x) => x ? `${x.slice(8, 10)}/${x.slice(5, 7)}` : '';
     document.querySelectorAll('.tt-days').forEach((el) => { el.textContent = T.days ? `${iso(T.from)} – ${iso(T.to)}，${T.days} 日，全月 ${T.days_in_month} 日` : '未有本月數據'; });
     document.querySelectorAll('.tt-tab').forEach((el) => { el.textContent = DATA.tm_tab || ''; });
+    if ($('tt-projhow')) $('tt-projhow').innerHTML = '<b>Projected GPA 點計</b><ul class="note-list">' + projHow('tm') + '<li>Projected TM cost 就唔使權重：直接用 TM cost sheet 嘅全月預計（roster / 更表）。</li></ul>';
     document.querySelectorAll('.tt-gpa').forEach((el) => { el.textContent = !T.gpa_days ? '（Raw 未有本月數據，Actual % 同 Projected % 暫時空白）' : (T.gpa_days < T.days ? `（Raw 只計到 ${iso(T.gpa_to)}，GPA 按 ${T.gpa_days} 日平均推到 ${T.days} 日）` : `（計到 ${iso(T.gpa_to)}，同 TM cost 一樣）`); });
     const shops = T.shops.filter((r) => passTier(r.shop_code)).map((r) => ({ ...r, _tgt_tm: r.target_tm, _tgt_gpa: r.target_tm != null && r.target_pct ? r.target_tm / r.target_pct : null }));
     const ratio = (a, b) => (a != null && b) ? a / b : null; // b = 0 (no GPA yet) -> blank
@@ -1509,7 +1537,7 @@
       ['target', 'non_senior', 'senior_webcart', 'senior_non_webcart', 'pickup_gmv', 'proj_gmv'].forEach((k) => { o[k] = d3.sum(rows, (r) => r[k] || 0); });
       o.current_ach = achOf(d3.sum(t, (r) => r.pickup_gmv || 0), o.target); o.proj_ach = achOf(d3.sum(t, (r) => r.proj_gmv || 0), o.target); return o; };
     const T = sm(all);
-    $('pu-note').innerHTML = '<ul class="note-list"><li><b>來源</b>：Tableau（O2O Report › Shop Pick-up）</li><li>冇 target 嘅舖唔計入達標 %</li></ul>';
+    $('pu-note').innerHTML = '<ul class="note-list"><li><b>來源</b>：Tableau（O2O Report › Shop Pick-up）；Projected GMV / Projected ach. 由 dashboard 自己計（見下面），所以會同 Tableau 個 Projected 有少少唔同</li><li>冇 target 嘅舖唔計入達標 %</li>' + projHow('pickup') + '</ul>';
     tiles($('pu-kpis'), [
       ['Pick-up Target', fmtK(T.target), { hint: '全月' }], ['Total Pick-up GMV', fmtK(T.pickup_gmv), { hint: '月初至今' }],
       ['Current achievement', fmtP(T.current_ach)], ['Projected Pick-up GMV', fmtK(T.proj_gmv)],
@@ -1597,10 +1625,10 @@
       ['Disposal rate', 'Overall disposal rate = Total Disposal Cost ÷ GMV（越低越好）', `PED Disposal sheet「By Shop」${PED.as_of ? '，' + esc(PED.as_of) : ''}`, `${R} = 高過 target ${((((PED.disp || {}).targets || {}).Overall || {}).overall != null) ? '（' + fmtP(PED.disp.targets.Overall.overall) + '）' : ''}，${G} = 未超`],
       ['Fruit discount', '生果類（POS Cat = Fruits）manual discount 金額；Fruit disc. % = Fruit discount ÷（Fruit GMV + Fruit discount）（越低越好）',
         PED.fruit ? `PED Disposal sheet「Overall Summary」${PED.as_of ? '，' + esc(PED.as_of) : ''}` : '未有數（PED sheet 未讀到）', '—'],
-      ['TM %', 'TM cost ÷（POS GPA + Pickup GPA）（越低越好）。MTD = 月初至今實際；Proj. = 全月預計；TM target % = 該 UM / SS 嘅 target',
+      ['TM %', 'TM cost ÷（POS GPA + Pickup GPA）（越低越好）。MTD = 月初至今實際；Proj. = 全月預計 TM cost ÷ 預計全月 GPA（預計 GPA 有計平日 / 週末權重，計法見 TM cost tab）；TM target % = 該 UM / SS 嘅 target',
         `TM cost sheet + DOP Raw，計到 ${esc(T.to) || '—'}；target 來自 O2O Shop Target 2026`, `TM % (Proj.)：${R} = 高過 target，${G} = 未超 target`],
-      ['POS', 'POS GMV (MTD) = 月初至今；POS target = 全月；POS proj. ach. = 預計全月 GMV ÷ target（越高越好）', `Tableau POS (pospay Delivery and POS)，${esc((DATA.pos || {}).period) || '—'}`, `${G} = 預計達標（≥ 100%），${R} = 低過 80%`],
-      ['Pickup', 'Pickup GMV (MTD) = 月初至今；Pickup target = 全月；Pickup proj. ach. = 預計全月 GMV ÷ target（越高越好）', `Tableau Shop Pick-up，${esc((DATA.pickup || {}).period) || '—'}`, `${G} = 預計達標（≥ 100%），${R} = 低過 80%`],
+      ['POS', 'POS GMV (MTD) = 月初至今；POS target = 全月；POS proj. ach. = 預計全月 GMV ÷ target（越高越好；預計有計平日 / 週末權重，計法見 POS achievement tab）', `Tableau POS (pospay Delivery and POS)，${esc((DATA.pos || {}).period) || '—'}`, `${G} = 預計達標（≥ 100%），${R} = 低過 80%`],
+      ['Pickup', 'Pickup GMV (MTD) = 月初至今；Pickup target = 全月；Pickup proj. ach. = 預計全月 GMV ÷ target（越高越好；預計有計平日 / 週末權重，計法見 Pickup tab）', `Tableau Shop Pick-up，${esc((DATA.pickup || {}).period) || '—'}`, `${G} = 預計達標（≥ 100%），${R} = 低過 80%`],
     ];
     $('um-defs').innerHTML = `<thead><tr>${defs[0].map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${defs.slice(1).map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`
       + `<tfoot><tr><td colspan="4" style="font-weight: 400; color: var(--muted); white-space: normal">冇 target 嘅舖唔計入達標 % 同 target。揀咗 Shop tier 時，TM target % 改用該批舖嘅 target 加埋計。</td></tr></tfoot>`;

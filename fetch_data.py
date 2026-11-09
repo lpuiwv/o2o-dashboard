@@ -503,7 +503,11 @@ def ped_disposal(get, cats):
     return {"shops": shops, "targets": targets, "cats": cats} if shops else None
 
 
-def fetch_ped(get):
+def is_outlet_cat(cat):
+    return str(cat or "").strip().lower().startswith("outlet")
+
+
+def fetch_ped(get, outlet_skus=frozenset()):
     """'Overall Summary' of the PED Disposal+Discount+GP sheet (one row per shop x SKU, month to date; pipeline runs
     daily 12:45 with T-1 data). Returns (summary, sku_payload):
     summary = {fruit: {shop: {disc, gmv}}, um: {shop: UM}, as_of}; sku_payload = compact shop x SKU rows for the
@@ -525,13 +529,15 @@ def fetch_ped(get):
     if c["shop"] is None or c["sku"] is None:
         return None, None
     g = lambda r, k: r[c[k]] if c[k] is not None and c[k] < len(r) else ""
-    fruit, um, names, rows, cats = {}, {}, {}, [], {}
+    fruit, um, names, rows, cats, gmv_ex = {}, {}, {}, [], {}, {}
     for r in vals[1:]:
         shop, sku = str(g(r, "shop")).strip(), str(g(r, "sku")).strip()
         if not shop or not sku:
             continue
         cat = str(g(r, "cat")).strip()
         gmv, qty, disc = num(g(r, "gmv")) or 0, num(g(r, "qty")) or 0, num(g(r, "disc")) or 0
+        if not (sku in outlet_skus or is_outlet_cat(cat)):  # MD rate GMV without Outlet SKUs (Vivian, 9/11/2026)
+            gmv_ex[shop] = gmv_ex.get(shop, 0) + gmv
         disp, dq = abs(num(g(r, "disp")) or 0), abs(num(g(r, "disp_qty")) or 0)
         if str(g(r, "um")).strip():
             um.setdefault(shop, str(g(r, "um")).replace("\t", "").strip())
@@ -564,7 +570,8 @@ def fetch_ped(get):
         for k in d:
             d[k] = [round(x, 2) for x in d[k]]
     gmv_all = {shop: round(sum(v[0] for v in d.values()), 2) for shop, d in cats.items()}
-    return ({"fruit": fruit, "um": um, "as_of": as_of, "disp": ped_disposal(get, cats), "gmv": gmv_all},
+    return ({"fruit": fruit, "um": um, "as_of": as_of, "disp": ped_disposal(get, cats), "gmv": gmv_all,
+             "gmv_ex_outlet": {k: round(v, 2) for k, v in gmv_ex.items()}},
             {"cols": ["shop", "sku", "cat", "gmv", "qty", "disc", "disp_qty", "disp_cost"], "rows": rows, "names": names,
              "teams": teams, "um": um, "as_of": as_of})
 
@@ -600,7 +607,7 @@ def fetch_md(get):
         return None
 
 
-def fetch_md_raw(get, d, ped):
+def fetch_md_raw(get, d, ped, outlet_skus=frozenset()):
     """Manual Discount from the PED sheet's 'Discount Raw - <Mon YYYY>' tab (Vivian, 5/11/2026): one row per discounted
     POS line; keep only Promotion Label = MANUAL. Per shop: manual discount (all categories) and Fruits only
     (pos_category_type starting with "fruit"). GMV for the MD rate comes from the same sheet's 'Overall Summary'
@@ -616,12 +623,13 @@ def fetch_md_raw(get, d, ped):
     head = [str(h).strip().lower() for h in vals[0]]
     col = lambda n: head.index(n) if n in head else None
     c = {k: col(n) for k, n in (("shop", "shop code"), ("name", "store name"), ("date", "date"), ("amt", "discount amount"),
-                                ("label", "promotion label"), ("cat", "pos_category_type"), ("am", "am"), ("qty", "quantity"))}
+                                ("label", "promotion label"), ("cat", "pos_category_type"), ("am", "am"), ("qty", "quantity"),
+                                ("sku", "sku"))}
     if c["shop"] is None or c["amt"] is None or c["label"] is None:
         print(f"{tab}: columns not found", file=sys.stderr)
         return None
     g = lambda r, k: r[c[k]] if c[k] is not None and c[k] < len(r) else ""
-    shops, dates, labels, skipped = {}, [], {}, 0
+    shops, dates, labels, skipped, outlet_md = {}, [], {}, 0, 0.0
     for r in vals[1:]:
         shop = str(g(r, "shop")).strip()
         if not shop:
@@ -632,6 +640,9 @@ def fetch_md_raw(get, d, ped):
             skipped += 1
             continue
         amt = num(g(r, "amt")) or 0
+        if is_outlet_cat(g(r, "cat")) or str(g(r, "sku")).strip() in outlet_skus:  # Outlet SKUs left out (Vivian, 9/11/2026)
+            outlet_md += amt
+            continue
         o = shops.setdefault(shop, {"shop_code": shop, "shop_name": str(g(r, "name")).strip(), "am": str(g(r, "am")).strip(),
                                     "md": 0, "lines": 0, "qty": 0, "fruit_md": 0, "fruit_lines": 0})
         o["md"] += amt; o["lines"] += 1; o["qty"] += num(g(r, "qty")) or 0
@@ -641,7 +652,7 @@ def fetch_md_raw(get, d, ped):
         if dt_:
             dates.append(dt_)
     ped = ped or {}
-    gmv, fruit = ped.get("gmv") or {}, ped.get("fruit") or {}
+    gmv, fruit = ped.get("gmv_ex_outlet") or ped.get("gmv") or {}, ped.get("fruit") or {}
     for code in set(gmv) | set(fruit):  # shops with sales but no manual discount
         shops.setdefault(code, {"shop_code": code, "shop_name": "", "am": "", "md": 0, "lines": 0, "qty": 0, "fruit_md": 0, "fruit_lines": 0})
     for code, o in shops.items():
@@ -652,7 +663,7 @@ def fetch_md_raw(get, d, ped):
     fmt = lambda x: f"{x[8:10]}/{x[5:7]}/{x[0:4]}" if len(x) >= 10 else x
     period = f"{fmt(min(dates))} - {fmt(max(dates))}" if dates else ""
     return {"shops": sorted(shops.values(), key=lambda o: o["shop_code"]), "period": period, "source": "raw", "tab": tab,
-            "labels": labels, "skipped": skipped, "gmv_as_of": ped.get("as_of", ""), "exported_at": "", "tableau_updated": ""}
+            "labels": labels, "skipped": skipped, "excl_outlet": True, "outlet_md": round(outlet_md, 2), "gmv_as_of": ped.get("as_of", ""), "exported_at": "", "tableau_updated": ""}
 
 
 def parse_dop_target(values):
@@ -1081,18 +1092,28 @@ def fetch_all(get=None, past=None):
                 r[blk]["total"] -= r[blk]["mgmt"]
                 r[blk]["mgmt"] = 0
             r["total_cost"], r["roster_total_cost"] = r["act"]["total"], r["proj"]["total"]
+    # Outlet SKUs (Tableau POS category "Outlet SKUs") are left out of Manual Discount, MD and GMV (Vivian, 9/11/2026)
+    offline_t, offsku = fetch_offline_tab(get), fetch_offline_sku(get)
+    outlet_skus = frozenset([k for k, v in ((offsku or {}).get("skus") or {}).items() if is_outlet_cat(v[1])]
+                            + [x["sku"] for x in (offline_t or {}).get("skus", []) if is_outlet_cat(x.get("cat"))])
     if past:
         # PED 'Overall Summary' / 'By Shop' only hold the current month: no Disposal / Fruit / UM data for a past month.
-        # Manual discount = PED 'Discount Raw - <Mon YYYY>' (MANUAL lines); GMV for the MD rate = Tableau Store GMV of that month.
+        # Manual discount = PED 'Discount Raw - <Mon YYYY>' (MANUAL lines); GMV for the MD rate = Tableau Store GMV of that month
+        # minus that shop's Outlet SKUs GMV (Tableau POS offline by shop x category).
         ped, sku = None, None
         md_t = fetch_md(get)
-        md = fetch_md_raw(get, raw["_date"], {"gmv": {s["shop_code"]: s.get("gmv") for s in (md_t or {}).get("shops", [])}}) or md_t
+        out_g = {}
+        for x in (offline_t or {}).get("shops", []):
+            if is_outlet_cat(x.get("cat")):
+                out_g[x["shop"]] = out_g.get(x["shop"], 0) + (x.get("gmv") or 0)
+        gm = {s["shop_code"]: (None if s.get("gmv") is None else round(s["gmv"] - out_g.get(s["shop_code"], 0), 2)) for s in (md_t or {}).get("shops", [])}
+        md = fetch_md_raw(get, raw["_date"], {"gmv": gm}, outlet_skus) or md_t
         if md and md.get("source") == "raw":
             md["gmv_src"] = "tableau"
             md["period"] = (md_t or {}).get("period") or md["period"]
     else:
-        ped, sku = fetch_ped(get)
-        md = fetch_md_raw(get, raw["_date"], ped) or fetch_md(get)
+        ped, sku = fetch_ped(get, outlet_skus)
+        md = fetch_md_raw(get, raw["_date"], ped, outlet_skus) or fetch_md(get)
     return {
         "month": raw["_month"],
         "as_of": as_of,
@@ -1104,7 +1125,7 @@ def fetch_all(get=None, past=None):
         "disposal": None if past else fetch_disposal(get),
         "redemption": fetch_redemption(get),
         "pickup": fetch_pickup(get),
-        "offline_t": fetch_offline_tab(get), "_offsku": fetch_offline_sku(get),
+        "offline_t": offline_t, "_offsku": offsku,
         "ped": ped, "_sku": sku,
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),

@@ -437,6 +437,32 @@ def fetch_offline_tab(get):
     return {"shops": shops, "skus": skus, "period": info.get("POS offline period", ""), "exported_at": info.get("POS offline exported at", "")}
 
 
+def fetch_offline_sku(get):
+    """POS offline by shop x SKU from Tableau "POS Takeaway by Shop by SKU Sales", written daily by the 09:52 task into the POS
+    sheet tab 'POS offline by shop by SKU' (A:M = DM, AM, Shop code, Shop name, POS category, Sub cat 2, Sub cat 3, Brand, SKU,
+    SKU name, Total POS GMV, QTY, Refund value; Vivian, 9/11/2026: dashboard users have no Tableau login). Returned as a compact
+    payload for its own encrypted file (site/offsku*.enc.json), downloaded as an Excel-friendly CSV from the POS offline tab."""
+    try:
+        vals = get(POS_SHEET, f"{pos_tab('POS offline by shop by SKU')}!A1:M40000")
+        info = {str(r[0]).strip(): (r[1] if len(r) > 1 else "") for r in info_rows(get) if r}
+    except Exception as e:
+        print(f"POS offline by shop by SKU not read: {e}", file=sys.stderr)
+        return None
+    shops, skus, rows = {}, {}, []
+    for r in (vals or [])[1:]:
+        r = list(r) + [""] * (13 - len(r))
+        shop, sku = str(r[2]).strip(), str(r[8]).strip()
+        if not shop or not sku:
+            continue
+        shops.setdefault(shop, [str(r[3]).strip(), str(r[0]).strip(), str(r[1]).strip()])
+        skus.setdefault(sku, [str(r[9]).strip(), str(r[4]).strip(), str(r[5]).strip(), str(r[6]).strip(), str(r[7]).strip()])
+        rows.append([shop, sku, round(num(r[10]) or 0, 2), num(r[11]) or 0, round(num(r[12]) or 0, 2)])
+    if not rows:
+        return None
+    return {"shops": shops, "skus": skus, "rows": rows, "period": info.get("POS offline by SKU period", ""),
+            "exported_at": info.get("POS offline by SKU exported at", "")}
+
+
 PED_SHOP_COLS = {"dm": "dm", "am": "am", "um": "um/sm", "shop_code": "shop code", "shop_name": "shop name",
                  "shop_cost": "shop disposal cost", "shop_rate": "shop disposal rate", "st_cost": "stocktake disposal cost",
                  "st_rate": "stocktake disposal rate", "dam_cost": "stock in dam + uom cost", "dam_rate": "stock in dam + uom rate",
@@ -1078,7 +1104,7 @@ def fetch_all(get=None, past=None):
         "disposal": None if past else fetch_disposal(get),
         "redemption": fetch_redemption(get),
         "pickup": fetch_pickup(get),
-        "offline_t": fetch_offline_tab(get),
+        "offline_t": fetch_offline_tab(get), "_offsku": fetch_offline_sku(get),
         "ped": ped, "_sku": sku,
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),
@@ -1157,6 +1183,8 @@ def main():
     get = make_getter()
     data = fetch_all(get)
     sku = data.pop("_sku", None)
+    offsku = data.pop("_offsku", None)
+    data["offsku"] = bool(offsku)
     update_history(data, password)
     site = ROOT / "site"
     site.mkdir(exist_ok=True)
@@ -1171,6 +1199,10 @@ def main():
         try:
             pdata = fetch_all(get, past=last)
             pdata.pop("_sku", None)
+            osk = pdata.pop("_offsku", None)
+            pdata["offsku"] = bool(osk)
+            if osk:
+                (site / f"offsku_{last:%Y%m}.enc.json").write_text(json.dumps(encrypt(osk, password)), encoding="utf-8")
             update_history(pdata, password, save=False)
             (site / f"data_{last:%Y%m}.enc.json").write_text(json.dumps(encrypt(pdata, password)), encoding="utf-8")
             months.append({"key": f"{last:%Y%m}", "label": pdata["month"]})
@@ -1180,6 +1212,8 @@ def main():
         finally:
             POS_SFX = ""
     data["months"] = months
+    if offsku:  # Tableau POS offline shop x SKU (download only): own encrypted file, loaded when the button is pressed
+        (site / "offsku.enc.json").write_text(json.dumps(encrypt(offsku, password)), encoding="utf-8")
     if sku:  # POS offline shop x SKU rows: own encrypted file, loaded only when that tab opens
         (site / "sku.enc.json").write_text(json.dumps(encrypt(sku, password)), encoding="utf-8")
     (site / "data.enc.json").write_text(json.dumps(encrypt(data, password)), encoding="utf-8")

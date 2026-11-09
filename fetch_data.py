@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -950,7 +951,15 @@ def make_getter():
     svc = build("sheets", "v4", credentials=creds, cache_discovery=False)
 
     def get(sheet_id, rng):
-        return svc.spreadsheets().values().get(spreadsheetId=sheet_id, range=rng).execute().get("values", [])
+        # Sheets API allows 60 reads / minute: on a 429 wait and retry (the past-month build doubles the reads; 9/11/2026)
+        for i in range(5):
+            try:
+                return svc.spreadsheets().values().get(spreadsheetId=sheet_id, range=rng).execute().get("values", [])
+            except Exception as e:
+                if i < 4 and ("RATE_LIMIT_EXCEEDED" in str(e) or "HttpError 429" in str(e)):
+                    time.sleep(20 * (i + 1))
+                    continue
+                raise
     return get
 
 

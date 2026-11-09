@@ -899,6 +899,77 @@ def parse_shop_gpa_target(values):
     return out
 
 
+PROJ_W_KINDS = (("pickup gpa", "pickup"), ("pos gmv", "pos_gmv"), ("pos gpa", "pos_gpa"))
+
+
+def parse_proj_weights(values, d):
+    """DOP bot 'Projection weights' tab (Vivian, 9/11/2026): per shop, weekday/weekend weights built from last month's
+    Raw, as cumulative sums by day of month (d0 = 0, d1..d31). Sections "Pickup GPA / POS GMV / POS GPA — cumulative
+    weights by day". Returns {"pickup"|"pos_gmv"|"pos_gpa": {shop: [d0, d1, ...]}, "meta": [...]} or None when the tab is
+    missing or built for another month (title "Projection weights — <Mon YYYY>")."""
+    if not values:
+        return None
+    title = str((values[0] or [""])[0])
+    if f"{d:%b %Y}" not in title:
+        print(f"Projection weights tab is for another month ({title}); projections stay linear", file=sys.stderr)
+        return None
+    out, cur = {"meta": [str((r or [""])[0]).strip() for r in values[:4] if r and str(r[0]).strip()]}, None
+    for r in values:
+        head = str((r or [""])[0]).strip()
+        low = head.lower()
+        if "cumulative" in low:
+            cur = next((k for pre, k in PROJ_W_KINDS if low.startswith(pre)), None)
+            if cur:
+                out[cur] = {}
+            continue
+        if not head or "weights" in low or low == "shop code":
+            cur = None if not head or "weights" in low else cur
+            continue
+        if cur:
+            vals = [num(x) for x in r[1:]]
+            if vals and all(v is not None for v in vals):
+                out[cur][head] = vals
+    return out if all(k in out for _, k in PROJ_W_KINDS) else None
+
+
+def proj_factor(W, kind, shop, done, dim):
+    """Full-month / month-to-date factor = cumulative weight of all days ÷ cumulative weight of the days already in.
+    Uses the shop's own weights, else the DEPT (all shops) row. None = no weights → caller keeps the linear projection."""
+    tbl = (W or {}).get(kind) or {}
+    cum = tbl.get(shop) or tbl.get("DEPT")
+    if not cum or not done or done >= dim or len(cum) <= dim or not cum[done]:
+        return None
+    return cum[dim] / cum[done]
+
+
+def period_end_day(period):
+    """'01/11/2026 - 08/11/2026' -> 8 (day of the last date)."""
+    m = re.findall(r"(\d{1,2})/\d{1,2}/\d{4}", str(period or ""))
+    return int(m[-1]) if m else None
+
+
+def weight_achievement(block, W, kind, gmv_key, d):
+    """Replace Tableau's straight-line Projected GMV / ach. of each shop with the weekday/weekend-weighted one
+    (Vivian, 9/11/2026). Tableau's own figure is kept as proj_gmv_linear."""
+    if not block or not W:
+        return block
+    dim = calendar.monthrange(d.year, d.month)[1]
+    done = period_end_day(block.get("period"))
+    n = 0
+    for r in block.get("shops") or []:
+        f = proj_factor(W, kind, r.get("shop_code"), done, dim)
+        if f is None or r.get(gmv_key) is None:
+            continue
+        r["proj_gmv_linear"], r["proj_ach_linear"] = r.get("proj_gmv"), r.get("proj_ach")
+        r["proj_gmv"] = round(r[gmv_key] * f, 2)
+        r["proj_ach"] = r["proj_gmv"] / r["target"] if r.get("target") else None
+        r["proj_factor"] = round(f, 4)
+        n += 1
+    block["proj_method"] = "weights" if n else "linear"
+    block["proj_days"] = done
+    return block
+
+
 def parse_raw_gpa(values):
     """DOP bot 'Raw - <Mon YYYY>': per shop per day -> {date: {shop: [tm_cost, pos_gpa + pickup_gpa]}} (cols K, H, E)."""
     out = {}
@@ -906,11 +977,11 @@ def parse_raw_gpa(values):
         if len(r) < 11 or not str(r[0]).strip() or not str(r[1]).strip():
             continue
         tm, gpa, pk = num(r[10]), num(r[7]), num(r[4])
-        out.setdefault(str(r[0]).strip(), {})[str(r[1]).strip()] = [tm or 0, (gpa or 0) + (pk or 0), tm is not None]
+        out.setdefault(str(r[0]).strip(), {})[str(r[1]).strip()] = [tm or 0, (gpa or 0) + (pk or 0), tm is not None, gpa or 0, pk or 0]
     return dict(sorted(out.items()))
 
 
-def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None, tm_to=None):
+def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None, tm_to=None, W=None):
     """Per shop (Vivian, 2/11/2026): TM cost figures from the TM cost sheet ('TM Cost by shop YYYYMM V1': actual to date,
     full-month projection, "<Mon> TM Cost (excl. DMAM)" target, DEF = target − projection); target % from the
     "<Mon> TM cost target" tab. GPA (POS GPA + Pickup GPA) from DOP 'Raw' for the same days as the TM actual
@@ -935,6 +1006,13 @@ def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None, tm_to=None):
             gpa = gpa / len(use) * tm_to
         gall = sum(days[k].get(code, [0, 0])[1] for k in gdays)
         pgpa = gall / len(gdays) * dim if gdays else None
+        # Weekday/weekend weights (Vivian, 9/11/2026): POS GPA × POS GPA factor + Pickup GPA × Pickup factor
+        done = int(gdays[-1][8:10]) if gdays else None
+        fp, fk = proj_factor(W, "pos_gpa", code, done, dim), proj_factor(W, "pickup", code, done, dim)
+        if gdays and fp is not None and fk is not None:
+            pos_all = sum((days[k].get(code) or [0, 0, 0, 0, 0])[3] for k in gdays)
+            pk_all = sum((days[k].get(code) or [0, 0, 0, 0, 0])[4] for k in gdays)
+            pgpa = pos_all * fp + pk_all * fk
         tm = r.get("total_cost") if r else sum(days[k].get(code, [0, 0])[0] for k in use)
         tgt_tm = r.get("target_tm")
         if tgt_tm is None and (gpa_target or {}).get(code) is not None:
@@ -942,9 +1020,11 @@ def tm_vs_target(target, raw_rows, tm_rows, d, gpa_target=None, tm_to=None):
         shops.append({"shop_code": code, "shop_name": t["name"], "dm": t["dm"], "am": t["am"], "um": t["um"],
                       "target_pct": t["pct"], "tm": round(tm, 2) if tm is not None else None, "gpa": round(gpa, 2),
                       "proj_tm": r.get("roster_total_cost"), "proj_gpa": round(pgpa, 2) if pgpa is not None else None,
-                      "target_tm": round(tgt_tm, 2) if tgt_tm is not None else None, "target_def": r.get("target_def")})
+                      "target_tm": round(tgt_tm, 2) if tgt_tm is not None else None, "target_def": r.get("target_def"),
+                      "pf_pos": round(fp, 4) if fp is not None else None, "pf_pk": round(fk, 4) if fk is not None else None})
     end = f"{d:%Y-%m}-{tm_to:02d}" if tm_to else (use[-1] if use else "")
     return {"shops": shops, "days": tm_to or len(use), "gpa_days": len(use), "from": f"{d:%Y-%m}-01", "to": end,
+            "proj_method": "weights" if W and gdays and int(gdays[-1][8:10]) < dim else "linear", "proj_days": int(gdays[-1][8:10]) if gdays else None,
             "gpa_to": use[-1] if use else "", "days_in_month": dim, "tm_source": "sheet" if tm_rows and "target_tm" in tm_rows[0] else "raw"}
 
 
@@ -964,6 +1044,7 @@ def tabs_for(d):
         "raw": (DOP_SHEET, f"'Raw - {mon}'!A2:K4000"),
         "tm_target": (TARGET_SHEET, f"'{d:%b} TM cost target'!A1:Y200"),
         "gpa_target": (TARGET_SHEET, f"'{d:%b}'!A1:I200"),
+        "proj_w": (DOP_SHEET, "'Projection weights'!A1:AH420"),
         "_month": d.strftime("%B %Y"),
     }
 
@@ -1009,7 +1090,7 @@ def fetch_month(get, d):
             t.update(upd)
     except Exception:
         pass
-    optional = ("dop_target", "tm_daily", "raw", "commission", "tm_daily_head", "tm_target", "gpa_target")
+    optional = ("dop_target", "tm_daily", "raw", "commission", "tm_daily_head", "tm_target", "gpa_target", "proj_w")
     out = {k: get(*v) for k, v in t.items() if not k.startswith("_") and k not in optional}
     for k in optional:
         try:
@@ -1066,6 +1147,7 @@ def fetch_all(get=None, past=None):
     dm_ex, _, _ = parse_team(raw["dm_ex"], "dm")
     am_ex, _, _ = parse_team(raw["am_ex"], "am")
     shops = parse_shops(raw["shops"])
+    W = None if past else parse_proj_weights(raw.get("proj_w") or [], raw["_date"])
     dop_src = "summary"
     if any(s.get("proj_dop") is not None for s in shops):
         # From 5/11/2026 the DOP tab is built from 'DOP MTD - <Mon YYYY>' (Vivian: more accurate than the Summary tabs):
@@ -1120,11 +1202,11 @@ def fetch_all(get=None, past=None):
         "dates": dates,
         "tm_budget": fetch_budget(get, raw["_date"]),
         "dm_ex": dm_ex, "am_ex": am_ex,
-        "pos": fetch_pos(get),
+        "pos": weight_achievement(fetch_pos(get), W, "pos_gmv", "pos_gmv", raw["_date"]),
         "md": md,
         "disposal": None if past else fetch_disposal(get),
         "redemption": fetch_redemption(get),
-        "pickup": fetch_pickup(get),
+        "pickup": weight_achievement(fetch_pickup(get), W, "pickup", "pickup_gmv", raw["_date"]),
         "offline_t": offline_t, "_offsku": offsku,
         "ped": ped, "_sku": sku,
         "tiers": fetch_tiers(get),
@@ -1136,7 +1218,8 @@ def fetch_all(get=None, past=None):
         "stamps": tm_stamps(raw),
         "tm_target_pct": parse_tm_target_summary(raw.get("tm_target") or []),
         "tm_target": tm_vs_target(parse_tm_target(raw.get("tm_target") or []), raw.get("raw") or [], tm, raw["_date"],
-                                  parse_shop_gpa_target(raw.get("gpa_target") or []), tm_actual_day(raw)),
+                                  parse_shop_gpa_target(raw.get("gpa_target") or []), tm_actual_day(raw), W),
+        "proj_weights": {"tab": "Projection weights", "meta": W.get("meta", [])} if W else None,
         "tm_tab": raw["_tm_tab"], "tm_um_split": um_split, "tm_ft_ratio": ft_ratio, "tm_excl_dmam": excl_dmam,
         "_tm_month": f"{raw['_date']:%Y%m}", "month_key": f"{raw['_date']:%Y%m}", "past": bool(past),
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),

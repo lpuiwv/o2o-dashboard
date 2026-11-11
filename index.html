@@ -78,6 +78,8 @@
   td.flag { color: var(--warn); font-weight: 500; }
   .bar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
   .ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .off-dates { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .off-dates input[type=date] { font: inherit; padding: 4px 6px; }
   .dl-row { display: flex; justify-content: flex-end; margin: 4px 0 6px; }
   a.dl { display: inline-block; text-decoration: none; }
   .per { display: block; width: fit-content; font-size: 12px; color: var(--fg); background: var(--grid); border-left: 3px solid var(--accent); border-radius: 4px; padding: 3px 8px; margin: 2px 0 6px; }
@@ -425,7 +427,7 @@
     <div class="stamp" id="stamp-offline"></div>
     <div class="sec">
       <p class="note" id="off-note">載入緊……</p>
-      <div class="ctrl"><select id="off-dm" aria-label="Filter by DM"></select><select id="off-am" aria-label="Filter by AM"></select><select id="off-um" aria-label="Filter by UM / SS"></select><select id="off-shop" aria-label="Filter by shop"></select><select id="off-cat" aria-label="Filter by POS category"></select><input id="off-search" type="search" placeholder="搜尋 SKU 或貨品名" aria-label="Search SKU"></div>
+      <div class="ctrl"><select id="off-dm" aria-label="Filter by DM"></select><select id="off-am" aria-label="Filter by AM"></select><select id="off-um" aria-label="Filter by UM / SS"></select><select id="off-shop" aria-label="Filter by shop"></select><select id="off-cat" aria-label="Filter by POS category"></select><input id="off-search" type="search" placeholder="搜尋 SKU 或貨品名" aria-label="Search SKU"><span class="off-dates" id="off-dates" hidden>日期 <input id="off-from" type="date" aria-label="開始日期"> 至 <input id="off-to" type="date" aria-label="結束日期"> <button type="button" class="dl" id="off-dates-reset">月初至今</button></span></div>
       <div class="tiles" id="off-kpis"></div>
       <div class="grid">
         <div class="card" id="off-tab-card" hidden><h3>完整 by shop by SKU — 下載（Tableau 數）</h3><span class="per" data-per="offline" hidden></span><p class="note" id="off-tab-dl-note"></p>
@@ -1656,6 +1658,42 @@
   // ---------- POS offline: shop x SKU sales (PED 'Overall Summary'), loaded on demand (Vivian, 4/11/2026) ----------
   const offSel = ['off-dm', 'off-am', 'off-um', 'off-shop', 'off-cat'].map($);
   offSel.forEach((el) => el.addEventListener('change', () => draw())); $('off-search').addEventListener('input', () => draw());
+  // Date filter (Vivian, 11/11/2026): day-by-day shop x SKU rows ('POS offline daily' tab) live in the offsku file
+  ['off-from', 'off-to'].forEach((id) => $(id).addEventListener('change', () => draw()));
+  $('off-dates-reset').addEventListener('click', () => { $('off-from').value = ''; $('off-to').value = ''; draw(); });
+  const offKey = () => (DATA.past ? `offsku_${DATA.month_key}` : 'offsku');
+  async function loadOffsku() {
+    const key = offKey();
+    if (OFFSKU[key] !== undefined) return OFFSKU[key];
+    try { const res = await fetch(`${key}.enc.json?t=` + Date.now(), { cache: 'no-store' }); if (!res.ok) throw new Error('nofile'); OFFSKU[key] = await decrypt(await res.json(), PW); }
+    catch (e) { OFFSKU[key] = null; }
+    return OFFSKU[key];
+  }
+  const ymd2dmy = (s) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
+  function offRange(P, from, to) {
+    const D = P.daily, key = from + '|' + to;
+    if (D._c && D._c.key === key) return D._c.v;
+    const use = new Set(D.days.map((d, i) => (d >= from && d <= to ? i : -1)).filter((i) => i >= 0));
+    const sc = new Map(), sk = new Map(), pr = new Map();
+    D.rows.forEach(([di, si, ki, g, q, rf]) => {
+      if (!use.has(di)) return;
+      const shop = D.shops[si], sku = D.skus[ki], k = P.skus[sku] || [], sh = P.shops[shop] || [], cat = k[1] || '';
+      let a = sc.get(shop + '\u0001' + cat);
+      if (!a) sc.set(shop + '\u0001' + cat, (a = { dm: sh[1] || '', am: sh[2] || '', shop, shop_name: sh[0] || '', cat, gmv: 0, qty: 0, refund: 0 }));
+      a.gmv += g; a.qty += q; a.refund += rf;
+      let b = sk.get(sku);
+      if (!b) sk.set(sku, (b = { sku, name: k[0] || '', cat, brand: k[4] || '', sub: k[2] || '', gmv: 0, qty: 0, refund: 0, _s: new Set() }));
+      b.gmv += g; b.qty += q; b.refund += rf; b._s.add(shop);
+      let c = pr.get(shop + '\u0001' + sku);
+      if (!c) pr.set(shop + '\u0001' + sku, (c = [shop, sku, 0, 0, 0]));
+      c[2] += g; c[3] += q; c[4] += rf;
+    });
+    const r2 = (x) => Math.round(x * 100) / 100;
+    const v = { shops: [...sc.values()], skus: [...sk.values()].map(({ _s, ...b }) => ({ ...b, shops: _s.size })),
+      rows: [...pr.values()].sort((x, y) => x[0].localeCompare(y[0]) || y[2] - x[2]).map((r) => [r[0], r[1], r2(r[2]), r[3], r2(r[4])]), days: use.size };
+    D._c = { key, v };
+    return v;
+  }
   async function loadSku() {
     if (SKU || skuLoading) return; skuLoading = true;
     try {
@@ -1675,7 +1713,28 @@
   // Tableau "POS Takeaway by Shop by SKU Sales" summary (Vivian, 6/11/2026): shop x category + SKU totals; full list = Tableau CSV
   function tabDates(per) { const m = String(per || '').match(/(\d{2})\/(\d{2})\/(\d{4})\D+(\d{2})\/(\d{2})\/(\d{4})/); return m ? [`${m[3]}-${m[2]}-${m[1]}`, `${m[6]}-${m[5]}-${m[4]}`] : null; }
   function drawOfflineTab() {
-    const OT = DATA.offline_t;
+    let OT = DATA.offline_t;
+    // ---- date filter: default = the whole Tableau period (month to date); another range = sum of the daily rows ----
+    const DAYS = DATA.offline_days || [], fFrom = $('off-from'), fTo = $('off-to'), pd = tabDates(OT.period) || [DAYS[0], DAYS[DAYS.length - 1]];
+    $('off-dates').hidden = !DAYS.length;
+    let ranged = false, perTxt = String(OT.period || '');
+    if (DAYS.length) {
+      const lo = DAYS[0] < pd[0] ? DAYS[0] : pd[0], hi = DAYS[DAYS.length - 1] > pd[1] ? DAYS[DAYS.length - 1] : pd[1];
+      fFrom.min = fTo.min = lo; fFrom.max = fTo.max = hi;
+      if (!fFrom.value) fFrom.value = pd[0];
+      if (!fTo.value) fTo.value = pd[1];
+      if (fFrom.value > fTo.value) [fFrom.value, fTo.value] = [fTo.value, fFrom.value];
+      ranged = fFrom.value !== pd[0] || fTo.value !== pd[1];
+      $('off-dates-reset').hidden = !ranged;
+    }
+    let P = null;
+    if (ranged) {
+      P = OFFSKU[offKey()];
+      if (P === undefined) { $('off-note').textContent = '載入緊所選日期嘅數據……'; loadOffsku().then(() => { if (current === 'offline') draw(); }); return; }
+      if (!P || !P.daily) { $('off-note').textContent = '未能載入每日數據，顯示緊月初至今。'; ranged = false; }
+      else { const R = offRange(P, fFrom.value, fTo.value); OT = { ...OT, shops: R.shops, skus: R.skus, _rows: R.rows }; perTxt = `${ymd2dmy(fFrom.value)} - ${ymd2dmy(fTo.value)}`; }
+    }
+    const perShow = perTxt.replace(/\s+-\s+/, ' – ');
     $('off-um').hidden = true; $('off-tab-card').hidden = false; $('off-cat-card').hidden = false;
     const all = OT.shops.filter((r) => passTier(r.shop));
     const [fDm, fAm, , fShop, fCat] = offSel;
@@ -1684,33 +1743,35 @@
     const a2 = a1.filter((r) => !fAm.value || r.am === fAm.value); fillSel(fShop, [...new Set(a2.map((r) => r.shop))].sort(), 'All shops');
     const a3 = a2.filter((r) => !fShop.value || r.shop === fShop.value); fillSel(fCat, [...new Set(OT.shops.map((r) => r.cat).filter(Boolean))].sort(), 'All categories');
     const rows = a3.filter((r) => !fCat.value || r.cat === fCat.value);
-    $('off-note').textContent = 'Dashboard 顯示 by shop、by category 同 by SKU 嘅合計；每間舖每隻 SKU 嘅完整明細請用下面「下載」。';
+    const dLast = DAYS[DAYS.length - 1];
+    $('off-note').innerHTML = `Dashboard 顯示 by shop、by category 同 by SKU 嘅合計；每間舖每隻 SKU 嘅完整明細請用下面「下載」。<br><b>日期：${escH(perShow)}</b>${ranged ? '' : '（月初至今）'}`
+      + (DAYS.length ? `　·　可以用上面「日期」揀開始同結束日（每日數據 ${escH(ymd2dmy(DAYS[0]))} – ${escH(ymd2dmy(dLast))}），全部表、Top SKU 同下載都會跟住變。` : '')
+      + (ranged && fTo.value > dLast ? `<br><span class="neg">注意：每日數據暫時只有到 ${escH(ymd2dmy(dLast))}，之後嘅日子未計。</span>` : '');
     const sm = (k, rs = rows) => d3.sum(rs, (r) => r[k] || 0);
     const q = $('off-search').value.trim().toLowerCase();
     const skus = OT.skus.filter((r) => (!fCat.value || r.cat === fCat.value) && (!q || `${r.sku} ${r.name} ${r.brand}`.toLowerCase().includes(q)));
-    tiles($('off-kpis'), [['Total POS GMV', fmtK(sm('gmv')), { hint: '月初至今' }], ['Qty sold', fmtK(sm('qty'))], ['Refund value', fmtK(sm('refund'))],
+    tiles($('off-kpis'), [['Total POS GMV', fmtK(sm('gmv')), { hint: ranged ? perShow : '月初至今' }], ['Qty sold', fmtK(sm('qty'))], ['Refund value', fmtK(sm('refund'))],
       ['Shops', fmtN(new Set(rows.map((r) => r.shop)).size)], ['SKU', fmtN(skus.length), { hint: fCat.value || '全部類別' }]]);
     // full shop x SKU list (Tableau "POS Takeaway by Shop by SKU Sales", copied daily into the POS sheet; Vivian, 9/11/2026:
     // dashboard users have no Tableau login) -> Excel-friendly CSV (UTF-8 with BOM), following the DM / AM / shop / category / search filters
     $('off-tab-dl-note').innerHTML = DATA.offsku
-      ? `<ul class="note-list"><li><b>每行</b> = 一間舖一隻 SKU（POS takeaway，${escH(String(OT.period || '').replace(/\s+-\s+/, ' – '))}），Total POS GMV / QTY / Refund value 各一欄</li>
+      ? `<ul class="note-list"><li><b>每行</b> = 一間舖一隻 SKU（POS takeaway，${escH(perShow)}），Total POS GMV / QTY / Refund value 各一欄</li>
       <li>數據來自 Tableau「POS Takeaway by Shop by SKU Sales」，每日自動抄入；<b>唔使 Tableau 帳戶</b></li>
-      <li>會跟上面嘅 DM / AM / 舖 / 類別篩選同搜尋；用 Excel 直接開，中文正常</li></ul>`
+      <li>會跟上面嘅日期、DM / AM / 舖 / 類別篩選同搜尋；用 Excel 直接開，中文正常</li></ul>`
       : '未有 by shop by SKU 數據（POS sheet「POS offline by shop by SKU」tab 未有數）。';
     $('off-tab-dl').disabled = !DATA.offsku;
     $('off-tab-dl').onclick = async () => {
-      const key = DATA.past ? `offsku_${DATA.month_key}` : 'offsku';
       const btn = $('off-tab-dl'), label = btn.textContent;
-      let P = OFFSKU[key];
+      let P = OFFSKU[offKey()];
       if (!P) {
         btn.textContent = '載入緊……'; btn.disabled = true;
-        try { const res = await fetch(`${key}.enc.json?t=` + Date.now(), { cache: 'no-store' }); if (!res.ok) throw new Error('nofile'); P = OFFSKU[key] = await decrypt(await res.json(), PW); }
-        catch (e) { P = null; }
+        P = await loadOffsku();
         btn.textContent = label; btn.disabled = false;
       }
       if (!P) { $('off-tab-dl-note').textContent = '未能載入 by shop by SKU 數據。'; return; }
+      const srcRows = ranged && P.daily ? offRange(P, fFrom.value, fTo.value).rows : P.rows;
       const q2 = $('off-search').value.trim().toLowerCase();
-      const out = P.rows.filter(([shop, sku]) => { const sh = P.shops[shop] || [], k = P.skus[sku] || [];
+      const out = srcRows.filter(([shop, sku]) => { const sh = P.shops[shop] || [], k = P.skus[sku] || [];
         return passTier(shop) && (!fDm.value || sh[1] === fDm.value) && (!fAm.value || sh[2] === fAm.value) && (!fShop.value || shop === fShop.value) && (!fCat.value || k[1] === fCat.value)
           && (!q2 || `${sku} ${k[0]} ${k[4]}`.toLowerCase().includes(q2)); });
       const esc = (v) => { const x = String(v ?? ''); return /[",\n\r]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
@@ -1719,7 +1780,7 @@
         lines.push([sh[1], sh[2], shop, sh[0], k[1], k[2], k[3], k[4], sku, k[0], g, qty, rf].map(esc).join(',')); });
       const scope = [fDm.value, fAm.value, fShop.value, fCat.value].filter(Boolean).join(' ') || 'All';
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-      a.download = `O2O POS offline by shop by SKU (Tableau) - ${scope.replace(/[\\/:*?"<>|]+/g, ' ')} (${String(P.period || '').replace(/\//g, '-')}).csv`;
+      a.download = `O2O POS offline by shop by SKU (Tableau) - ${scope.replace(/[\\/:*?"<>|]+/g, ' ')} (${(ranged ? perTxt : String(P.period || '')).replace(/\//g, '-')}).csv`;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       $('off-tab-dl-note').insertAdjacentHTML('beforeend', `<p class="note">已下載 ${fmtN(out.length)} 行。</p>`);
     };

@@ -465,6 +465,40 @@ def fetch_offline_sku(get):
             "exported_at": info.get("POS offline by SKU exported at", "")}
 
 
+def fetch_offline_daily(get):
+    """Day-by-day POS offline by shop x SKU for the POS offline tab's date filter (Vivian, 11/11/2026). The POS sheet tab
+    'POS offline daily' has one row per date x shop: A Date (YYYY-MM-DD), B Shop code, C "sku|gmv|qty|refund;..." (Tableau
+    "POS Takeaway by Shop by SKU Sales" with Start Date = End Date = that day). Returns {days, shops, skus, rows} with
+    rows = [day index, shop index, sku index, gmv, qty, refund] (indexes keep the encrypted file small), or None."""
+    try:
+        vals = get(POS_SHEET, f"{pos_tab('POS offline daily')}!A1:C4000")
+    except Exception as e:
+        print(f"POS offline daily not read: {e}", file=sys.stderr)
+        return None
+    days, shops, skus, rows = {}, {}, {}, []
+    ix = lambda m, k: m.setdefault(k, len(m))
+    for r in (vals or [])[1:]:
+        r = list(r) + [""] * (3 - len(r))
+        day, shop = str(r[0]).strip(), str(r[1]).strip()
+        m = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})$", day) or re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})$", day)
+        if not m or not shop or not str(r[2]).strip():
+            continue
+        y, mo, dd = (m.group(1), m.group(2), m.group(3)) if len(m.group(1)) == 4 else (m.group(3), m.group(2), m.group(1))
+        day = f"{int(y):04d}-{int(mo):02d}-{int(dd):02d}"
+        for part in str(r[2]).split(";"):
+            f = part.split("|")
+            if len(f) < 4 or not f[0]:
+                continue
+            rows.append([day, ix(shops, shop), ix(skus, f[0]), round(num(f[1]) or 0, 2), num(f[2]) or 0, round(num(f[3]) or 0, 2)])
+    if not rows:
+        return None
+    dl = sorted({r[0] for r in rows})
+    di = {d: i for i, d in enumerate(dl)}
+    for r in rows:
+        r[0] = di[r[0]]
+    return {"days": dl, "shops": list(shops), "skus": list(skus), "rows": rows}
+
+
 PED_SHOP_COLS = {"dm": "dm", "am": "am", "um": "um/sm", "shop_code": "shop code", "shop_name": "shop name",
                  "shop_cost": "shop disposal cost", "shop_rate": "shop disposal rate", "st_cost": "stocktake disposal cost",
                  "st_rate": "stocktake disposal rate", "dam_cost": "stock in dam + uom cost", "dam_rate": "stock in dam + uom rate",
@@ -1178,6 +1212,9 @@ def fetch_all(get=None, past=None):
             r["total_cost"], r["roster_total_cost"] = r["act"]["total"], r["proj"]["total"]
     # Outlet SKUs (Tableau POS category "Outlet SKUs") are left out of Manual Discount, MD and GMV (Vivian, 9/11/2026)
     offline_t, offsku = fetch_offline_tab(get), fetch_offline_sku(get)
+    off_daily = fetch_offline_daily(get) if offsku else None
+    if off_daily:
+        offsku["daily"] = off_daily
     outlet_skus = frozenset([k for k, v in ((offsku or {}).get("skus") or {}).items() if is_outlet_cat(v[1])]
                             + [x["sku"] for x in (offline_t or {}).get("skus", []) if is_outlet_cat(x.get("cat"))])
     if past:
@@ -1209,7 +1246,7 @@ def fetch_all(get=None, past=None):
         "disposal": None if past else fetch_disposal(get),
         "redemption": fetch_redemption(get),
         "pickup": weight_achievement(fetch_pickup(get), W, "pickup", "pickup_gmv", raw["_date"]),
-        "offline_t": offline_t, "_offsku": offsku,
+        "offline_t": offline_t, "_offsku": offsku, "offline_days": (off_daily or {}).get("days") or [],
         "ped": ped, "_sku": sku,
         "tiers": fetch_tiers(get),
         "tm_daily": parse_tm_daily(raw.get("tm_daily") or []),

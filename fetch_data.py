@@ -289,6 +289,7 @@ def parse_tm_v1(values):
         return [i for i in range(lo, hi + 1) for p in prefixes if head[i].startswith(p)]
 
     um_split = bool(find(["UM/SS/ASS 成本"], 0, cut))
+    um_i = next((i for i, h in enumerate(head[:cut]) if h == "UM"), None)  # shop's UM / SS / ASS name (Vivian, 11/11/2026)
     # "<Mon> TM Cost (excl. DMAM)" / "<Mon> TM Target (excl. DMAM)" (renamed 3/11/2026) and the matching "… DEF …" column
     is_tgt = lambda h: "excl" in h and "DMAM" in h and ("TM Cost" in h or "TM Target" in h)
     tgt_i = [i for i, h in enumerate(head) if is_tgt(h) and "DEF" not in h]
@@ -317,6 +318,7 @@ def parse_tm_v1(values):
                      "sa_n": cnt(["SA 人數"]), "um_n": cnt(["UM 人數"]), "pt_hours": cnt(["PT 時數"]), "os_hours": cnt(["外判時數"]),
                      "total_cost": act["total"], "roster_total_cost": proj["total"], "act": act, "proj": proj,
                      "am": str(r[2]).strip(), "proj_n": proj_n,
+                     "um": str(r[um_i]).replace("\t", "").strip() if um_i is not None else "",
                      # "<Mon> TM Cost (excl. DMAM)" = target TM cost; "… DEF …" = target − projection (Vivian, 2/11/2026)
                      "target_tm": next((num(r[i]) for i in tgt_i), None), "target_def": next((num(r[i]) for i in def_i), None)})
     return rows, um_split
@@ -1196,7 +1198,7 @@ def fetch_all(get=None, past=None):
     else:
         ped, sku = fetch_ped(get, outlet_skus)
         md = fetch_md_raw(get, raw["_date"], ped, outlet_skus) or fetch_md(get)
-    return {
+    data = {
         "month": raw["_month"],
         "as_of": as_of,
         "dates": dates,
@@ -1225,6 +1227,23 @@ def fetch_all(get=None, past=None):
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
     }
+    use_tm_um(data, {r["shop"]: r["um"] for r in tm if r.get("um")})
+    return data
+
+
+def use_tm_um(data, tm_um):
+    """Shop -> UM / SS / ASS name comes from the TM cost sheet ('TM Cost by shop YYYYMM V1' column "UM") wherever the
+    dashboard shows a UM (Vivian, 11/11/2026: the '<Mon> TM cost target' tab had SHS / ABC swapped). Other sources
+    (target tab, PED sheet) are only used for shops the TM cost sheet does not list."""
+    if not tm_um:
+        return
+    for s in (data.get("tm_target") or {}).get("shops") or []:
+        s["um"] = tm_um.get(s.get("shop_code"), s.get("um"))
+    for blk in (data.get("ped"), data.get("_sku")):
+        if blk and isinstance(blk.get("um"), dict):
+            blk["um"] = {**blk["um"], **tm_um}
+    for s in ((data.get("ped") or {}).get("disp") or {}).get("shops") or []:
+        s["um"] = tm_um.get(s.get("shop_code"), s.get("um"))
 
 
 # ---------- encryption (AES-256-GCM, key from PBKDF2-SHA256) ----------

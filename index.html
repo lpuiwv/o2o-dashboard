@@ -226,7 +226,7 @@
           <dt>Projected TM cost</dt><dd>全月預計 TM cost</dd>
           <dt>Target TM cost</dt><dd>全月 TM cost target</dd>
           <dt>DEF</dt><dd>Target TM cost − Projected TM cost</dd>
-          <dt>GPA</dt><dd>POS GPA + Pickup GPA（Pickup GPA = pickup GMV × 6.9%）<span class="tt-gpa"></span></dd>
+          <dt>GPA</dt><dd>POS GPA + Pickup GPA（POS GPA = POS GMV − cost（只計該 SKU 本身嘅成本）+ rebate；Pickup GPA = pickup GMV × 6.9%）<span class="tt-gpa"></span></dd>
           <dt>Actual % / Projected %</dt><dd>TM cost ÷ GPA；Projected 用全月預計 TM cost ÷ 預計全月 GPA（預計 GPA 有計平日 / 週末，見下面「Projected GPA 點計」）</dd>
           <dt>Target %</dt><dd>TM cost ÷ GPA 嘅目標；每間舖用 target tab F 欄，DM / AM / Total 用 I–L 欄</dd>
           <dt>Projected vs target</dt><dd>Projected % − Target %（pp；正數 = 預計 TM cost 佔 GPA 高過目標，紅色）</dd>
@@ -910,6 +910,7 @@
       <ul><li><b>(Actual)</b> = 實數，月初至今（To date），計到 <b>${DATA.as_of}</b>。</li>
       <li><b>(Proj.)</b> = 全月預計（Projected，有考慮平日 / 週末 factor）。</li>
       <li>DOP = POS GPA + Pickup GPA − Frontline TM cost (UM–PT) − Disposal cost after claim supp − Other &amp; MKT costs。</li>
+      <li>POS GPA = POS GMV − cost（只計該 SKU 本身嘅成本）+ rebate；POS GP% = POS GPA ÷ POS GMV。</li>
       <li>DM / AM 數 = 該 DM / AM 旗下各舖加總。唔計「PROJECTED after Rebate, Claim supp, AST」。</li></ul>`;
     $('dop-dates').textContent = costDates.length ? `POS 銷售、disposal 同 marketing 計到 ${salesDate}；pickup GPA 同其他成本計到 ${costDates.join('、')}。` : `月初至今計到 ${DATA.as_of}。`;
     const checks = [];
@@ -975,7 +976,7 @@
       { key: 'vs_avg', label: 'Proj. DOP vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
     ]);
     $('shop-count').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一間舖（顯示緊 ${rows.length} 間）；<b>(Actual)</b> = 月初至今實數，<b>(Proj.)</b> = 全月預計</li>
-      <li><b>TM / GP</b> = Frontline TM cost ÷（POS GPA + Pickup GPA）</li><li><b>${DATA.dop_src === 'dop_mtd' ? 'DOP (Actual) vs avg</b> = 該舖月初至今 DOP' : 'DOP (Proj.) vs avg</b> = 該舖 Proj. DOP'} − 平均每間舖（最底 Avg 行）</li>
+      <li><b>POS GPA</b> = POS GMV − cost（只計該 SKU 本身嘅成本）+ rebate</li><li><b>TM / GP</b> = Frontline TM cost ÷（POS GPA + Pickup GPA）</li><li><b>${DATA.dop_src === 'dop_mtd' ? 'DOP (Actual) vs avg</b> = 該舖月初至今 DOP' : 'DOP (Proj.) vs avg</b> = 該舖 Proj. DOP'} − 平均每間舖（最底 Avg 行）</li>
       <li>「Excl. Outlet &amp; EPR」唔計 SWH、CHE 同 EPR；撳欄名可以排序</li></ul>`;
 
   }

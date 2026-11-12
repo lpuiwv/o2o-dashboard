@@ -410,6 +410,7 @@
         <h3 id="um-title">UM / SS KPI</h3>
         <span class="per" data-per="umss" hidden></span>
         <p class="note" id="um-note"></p>
+        <div class="dl-row"><button type="button" class="dl" id="um-dl-all">下載全部表（UM / SS / ASS，一個 CSV）</button></div>
         <h4 class="um-sub">UM（包括 AUM）</h4>
         <div class="scroll"><table id="um-table-um"></table></div>
         <h4 class="um-sub">SS</h4>
@@ -618,8 +619,8 @@
     b.addEventListener('click', () => downloadCsv(table));
     row.appendChild(b); box.before(row);
   }
-  function downloadCsv(table) {
-    const { rows, cols } = table._export || {}; if (!rows) return;
+  function csvLines(table) {
+    const { rows, cols } = table._export || {}; if (!rows) return null;
     const cell = (c, r) => {
       const v = c.get ? c.get(r) : r[c.key];
       if (v == null || v === '') return '';
@@ -627,14 +628,33 @@
       return String(v);
     };
     const esc = (x) => /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x;
-    const lines = [cols.map((c) => esc(c.label)).join(','), ...rows.map((r) => cols.map((c) => esc(cell(c, r))).join(','))];
-    const title = (table.closest('.card')?.querySelector('h3')?.textContent || table.id).replace(/[\\/:*?"<>|]+/g, ' ').trim();
-    const tab = document.querySelector('.tabs button[aria-selected="true"]')?.textContent || '';
+    return [cols.map((c) => esc(c.label)).join(','), ...rows.map((r) => cols.map((c) => esc(cell(c, r))).join(','))];
+  }
+  function saveCsv(lines, name) {
     const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `O2O ${tab} - ${title} (${(DATA.generated_at || '').slice(0, 10)}).csv`;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
+  function downloadCsv(table) {
+    const lines = csvLines(table); if (!lines) return;
+    const title = (table.closest('.card')?.querySelector('h3')?.textContent || table.id).replace(/[\\/:*?"<>|]+/g, ' ').trim();
+    const tab = document.querySelector('.tabs button[aria-selected="true"]')?.textContent || '';
+    saveCsv(lines, `O2O ${tab} - ${title} (${(DATA.generated_at || '').slice(0, 10)}).csv`);
+  }
+  // UM/SS KPI: all tables (UM, SS, ASS, plus 未分類 when shown) in one CSV, each under its own title row (Vivian, 12/11/2026)
+  $('um-dl-all').addEventListener('click', () => {
+    const parts = [['UM（包括 AUM）', 'um-table-um'], ['SS', 'um-table-ss'], ['ASS', 'um-table-ass'], ['未分類', 'um-table-other']];
+    const out = [];
+    parts.forEach(([name, id]) => {
+      if (id === 'um-table-other' && $('um-other-wrap').hidden) return;
+      const lines = csvLines($(id)); if (!lines) return;
+      if (out.length) out.push('');
+      out.push(name, ...lines);
+    });
+    if (!out.length) return;
+    const scope = [$('um-dm-filter').value, $('um-am-filter').value].filter((x) => x && !/^all$/i.test(x)).join(' ').replace(/[\\/:*?"<>|]+/g, ' ');
+    saveCsv(out, `O2O UM-SS KPI - ${scope || 'All'} (${(DATA.generated_at || '').slice(0, 10)}).csv`);
+  });
 
   // Stick the leading "freeze" columns to the left edge while the table scrolls sideways
   function freezeCols(table, cols) {

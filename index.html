@@ -911,6 +911,7 @@
       <li><b>(Proj.)</b> = 全月預計（Projected）。POS GMV (Proj.) 同 Pickup GMV (Proj.) 有計平日 / 週末 factor；Disposal cost (Proj.) 就只係 月初至今 disposal ÷ 已過日數 × 30（未扣 Charlie claim supp 實際金額；disposal 唔係平均分佈，只供參考）。</li>
       <li>DOP = POS GPA + Pickup GPA − Frontline TM cost (UM–PT) − Disposal cost after claim supp − Other &amp; MKT costs。</li>
       <li>POS GPA = POS GMV（唔計 webcart）− cost（只計該 SKU 本身嘅成本）+ rebate；POS GP% = POS GPA ÷ POS GMV。</li>
+      <li><b>其他成本點計</b>：<ul class="note-list"><li><b>Rent</b>：該舖實際租金</li><li><b>Operating cost</b>：按 GMV 比例分攤</li><li><b>Warehouse cost</b>：按 GMV 比例分攤</li><li><b>Logistics cost</b>：實際固定成本</li><li><b>Disposal cost</b>：舖嘅報廢成本</li><li><b>CAPEX</b>：開舖設備 / amenity 費用 ÷ 36 個月</li><li><b>Marketing cost</b>：marketing team 推廣嘅實際成本（例如 coupon discount）；marketing material 成本就平均分攤</li><li><b>DM / AM cost</b></li><li><b>Office staff TM cost</b></li></ul></li>
       <li>DM / AM 數 = 該 DM / AM 旗下各舖加總。唔計「PROJECTED after Rebate, Claim supp, AST」。</li></ul>`;
     $('dop-dates').textContent = costDates.length ? `POS 銷售、disposal 同 marketing 計到 ${salesDate}；pickup GPA 同其他成本計到 ${costDates.join('、')}。` : `月初至今計到 ${DATA.as_of}。`;
     const checks = [];

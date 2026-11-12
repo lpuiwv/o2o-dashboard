@@ -908,7 +908,7 @@
     srcBox.hidden = DATA.dop_src !== 'dop_mtd';
     if (DATA.dop_src === 'dop_mtd') srcBox.innerHTML = `<b>數據來源：DOP sheet「${DATA.dop_tab}」tab</b>
       <ul><li><b>(Actual)</b> = 實數，月初至今（To date），計到 <b>${DATA.as_of}</b>。</li>
-      <li><b>(Proj.)</b> = 全月預計（Projected，有考慮平日 / 週末 factor）。</li>
+      <li><b>(Proj.)</b> = 全月預計（Projected）。POS GMV (Proj.) 同 Pickup GMV (Proj.) 有計平日 / 週末 factor；Disposal cost (Proj.) 就只係 月初至今 disposal ÷ 已過日數 × 30（未扣 Charlie claim supp 實際金額；disposal 唔係平均分佈，只供參考）。</li>
       <li>DOP = POS GPA + Pickup GPA − Frontline TM cost (UM–PT) − Disposal cost after claim supp − Other &amp; MKT costs。</li>
       <li>POS GPA = POS GMV − cost（只計該 SKU 本身嘅成本）+ rebate；POS GP% = POS GPA ÷ POS GMV。</li>
       <li>DM / AM 數 = 該 DM / AM 旗下各舖加總。唔計「PROJECTED after Rebate, Claim supp, AST」。</li></ul>`;
@@ -975,7 +975,7 @@
       { key: 'dop', label: 'DOP', fmt: fmtN, sign: true }, { key: 'proj_dop', label: 'Proj. DOP', fmt: fmtN, sign: true },
       { key: 'vs_avg', label: 'Proj. DOP vs avg', fmt: (v) => v == null ? '' : (v > 0 ? '+' : '') + fmtN(v), sign: true, get: (r) => r._pin || avgRow.proj_dop == null ? null : (r.proj_dop || 0) - avgRow.proj_dop },
     ]);
-    $('shop-count').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一間舖（顯示緊 ${rows.length} 間）；<b>(Actual)</b> = 月初至今實數，<b>(Proj.)</b> = 全月預計</li>
+    $('shop-count').innerHTML = `<ul class="note-list"><li><b>每行</b> = 一間舖（顯示緊 ${rows.length} 間）；<b>(Actual)</b> = 月初至今實數，<b>(Proj.)</b> = 全月預計（POS GMV (Proj.) 同 Pickup GMV (Proj.) 有計平日 / 週末 factor；Disposal cost (Proj.) 就只係 月初至今 disposal ÷ 已過日數 × 30（未扣 Charlie claim supp 實際金額；disposal 唔係平均分佈，只供參考））</li>
       <li><b>POS GPA</b> = POS GMV − cost（只計該 SKU 本身嘅成本）+ rebate</li><li><b>TM / GP</b> = Frontline TM cost ÷（POS GPA + Pickup GPA）</li><li><b>${DATA.dop_src === 'dop_mtd' ? 'DOP (Actual) vs avg</b> = 該舖月初至今 DOP' : 'DOP (Proj.) vs avg</b> = 該舖 Proj. DOP'} − 平均每間舖（最底 Avg 行）</li>
       <li>「Excl. Outlet &amp; EPR」唔計 SWH、CHE 同 EPR；撳欄名可以排序</li></ul>`;
 

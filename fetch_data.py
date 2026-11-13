@@ -935,6 +935,26 @@ def parse_shop_gpa_target(values):
     return out
 
 
+def parse_pos_gpa_target(values):
+    """'<Mon>' tab of the target sheet, column "GPA" (col I) = full-month POS GPA target per shop (Vivian, 13/11/2026).
+    Returns {code: target}; shops with a blank GPA (SWH, CHE, MSM) are left out."""
+    if not values:
+        return {}
+    head = [str(h).replace("\n", " ").strip().lower() for h in values[0]]
+    try:
+        ci, gi = head.index("code"), head.index("gpa")
+    except ValueError:
+        return {}
+    out = {}
+    for r in values[1:]:
+        if len(r) <= max(ci, gi) or not str(r[ci]).strip():
+            continue
+        g = num(r[gi])
+        if g is not None:
+            out[str(r[ci]).strip()] = g
+    return out
+
+
 PROJ_W_KINDS = (("pickup gpa", "pickup"), ("pos gmv", "pos_gmv"), ("pos gpa", "pos_gpa"))
 
 
@@ -1263,6 +1283,7 @@ def fetch_all(get=None, past=None):
         "_tm_month": f"{raw['_date']:%Y%m}", "month_key": f"{raw['_date']:%Y%m}", "past": bool(past),
         "generated_at": dt.datetime.now(HKT).strftime("%Y-%m-%d %H:%M HKT"),
         "dm": dm, "am": am, "shops": shops, "tm": tm,
+        "pos_gpa_target": parse_pos_gpa_target(raw.get("gpa_target") or []),
     }
     use_tm_um(data, {r["shop"]: r["um"] for r in tm if r.get("um")})
     return data
